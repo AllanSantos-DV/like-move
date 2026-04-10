@@ -48,7 +48,6 @@ a = Analysis(
         'doctest',
         'argparse',
         'difflib',
-        'inspect',
         'multiprocessing',
         'socketserver',
     ],
