@@ -24,6 +24,12 @@ pil_hiddenimports = [
     'PIL.IcoImagePlugin',
 ]
 
+# App modules imported dynamically at runtime
+app_hiddenimports = [
+    'like_move.about',
+    'like_move.splash',
+]
+
 a = Analysis(
     ['main.pyw'],
     pathex=[],
@@ -31,7 +37,7 @@ a = Analysis(
     datas=[
         ('assets/like-move.ico', 'assets'),
     ],
-    hiddenimports=pystray_hiddenimports + pil_hiddenimports,
+    hiddenimports=pystray_hiddenimports + pil_hiddenimports + app_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
