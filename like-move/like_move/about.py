@@ -1,0 +1,245 @@
+import ctypes
+import ctypes.wintypes as wintypes
+import logging
+import os
+import sys
+import time
+import threading
+
+from PIL import Image, ImageDraw, ImageFont
+
+from .splash import (
+    _asset_path,
+    _pil_to_hbitmap,
+    _draw_centered,
+    user32,
+    gdi32,
+    kernel32,
+    WNDPROC,
+    WNDCLASSEXW,
+    POINT,
+    SIZE,
+    BLENDFUNCTION,
+    WS_POPUP,
+    WS_EX_LAYERED,
+    WS_EX_TOPMOST,
+    WS_EX_TOOLWINDOW,
+    SW_SHOWNOACTIVATE,
+    ULW_ALPHA,
+    AC_SRC_OVER,
+)
+from . import __version__
+
+logger = logging.getLogger(__name__)
+
+W: int = 420
+H: int = 360
+
+
+def show_about(icon=None) -> None:
+    """Show a custom About window (layered) and block until closed.
+
+    If an pystray Icon is passed, it will be hidden while the About window
+    is visible to avoid interaction with the tray (modal behaviour).
+    """
+    try:
+        _show_about_impl(icon)
+    except Exception:
+        logger.debug("About window failed", exc_info=True)
+
+
+def _show_about_impl(icon) -> None:
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Background rounded rectangle
+    draw.rounded_rectangle([(0, 0), (W - 1, H - 1)], radius=20, fill=(46, 204, 113, 230))
+
+    # App icon
+    try:
+        ico = Image.open(_asset_path("like-move.ico"))
+        ico = ico.resize((64, 64), Image.Resampling.LANCZOS)
+        if ico.mode != "RGBA":
+            ico = ico.convert("RGBA")
+        img.paste(ico, (24, 24), ico)
+    except Exception:
+        logger.debug("Failed to load icon for About", exc_info=True)
+
+    # Fonts
+    try:
+        font_title = ImageFont.truetype("segoeui.ttf", 26)
+        font_sub = ImageFont.truetype("segoeui.ttf", 14)
+    except OSError:
+        font_title = ImageFont.load_default()
+        font_sub = font_title
+
+    # Title and version
+    _draw_centered(draw, "like-move", 28, font_title, (255, 255, 255, 255), W)
+    _draw_centered(draw, f"v{__version__}", 64, font_sub, (255, 255, 255, 200), W)
+
+    # Body text (left-aligned)
+    body = (
+        "Mouse jiggler inteligente para Windows\n\n"
+        "Como usar:\n"
+        "• Clique direito no ícone para acessar o menu\n"
+        "• Ativo: Liga/desliga o jiggler\n"
+        "• Modo: Escolha entre Inatividade, KVM, Ambos ou Sempre\n"
+        "• Threshold: Tempo de espera antes de começar (15s a 5min)\n"
+        "• Dispositivos KVM: Escolha quais dispositivos monitorar\n\n"
+        "Ícone verde = ativo | Ícone cinza = pausado\n\n"
+        "github.com/AllanSantos-DV/like-move"
+    )
+    # draw multiline text with some margin
+    text_x = 24
+    text_y = 110
+    draw.multiline_text((text_x, text_y), body, font=font_sub, fill=(255, 255, 255, 220), spacing=4)
+
+    # OK button
+    btn_w, btn_h = 120, 36
+    btn_x1 = (W - btn_w) // 2
+    btn_y1 = H - 64
+    btn_x2 = btn_x1 + btn_w
+    btn_y2 = btn_y1 + btn_h
+    draw.rounded_rectangle([(btn_x1, btn_y1), (btn_x2, btn_y2)], radius=8, fill=(255, 255, 255, 255))
+    # OK text
+    try:
+        font_btn = ImageFont.truetype("segoeui.ttf", 14)
+    except OSError:
+        font_btn = ImageFont.load_default()
+    bbox = draw.textbbox((0, 0), "OK", font=font_btn)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    draw.text(((W - tw) // 2, btn_y1 + (btn_h - th) // 2), "OK", fill=(46, 204, 113, 255), font=font_btn)
+
+    # Close X (draw simple X in top-right)
+    x_margin = 18
+    x_size = 12
+    x_cx = W - x_margin
+    x_cy = x_margin
+    draw.line([(x_cx - x_size // 2, x_cy - x_size // 2), (x_cx + x_size // 2, x_cy + x_size // 2)], fill=(255, 255, 255, 220), width=2)
+    draw.line([(x_cx + x_size // 2, x_cy - x_size // 2), (x_cx - x_size // 2, x_cy + x_size // 2)], fill=(255, 255, 255, 220), width=2)
+
+    # Convert to HBITMAP
+    hbmp = _pil_to_hbitmap(img)
+    if not hbmp:
+        return
+
+    # WNDPROC
+    clicked = {"down": False}
+
+    def _wndproc(hwnd, msg, wp, lp):
+        if msg == 0x0002:  # WM_DESTROY
+            user32.PostQuitMessage(0)
+            return 0
+        if msg == 0x0201:  # WM_LBUTTONDOWN
+            x = lp & 0xFFFF
+            y = (lp >> 16) & 0xFFFF
+            clicked["down"] = True
+            clicked["x"] = x
+            clicked["y"] = y
+            return 0
+        if msg == 0x0202 and clicked.get("down"):
+            # WM_LBUTTONUP
+            x = lp & 0xFFFF
+            y = (lp >> 16) & 0xFFFF
+            clicked["down"] = False
+            # Check OK button
+            if btn_x1 <= x <= btn_x2 and btn_y1 <= y <= btn_y2:
+                user32.DestroyWindow(hwnd)
+                return 0
+            # Check close X (approx area 24x24 around x_cx,x_cy)
+            if abs(x - x_cx) <= 12 and abs(y - x_cy) <= 12:
+                user32.DestroyWindow(hwnd)
+                return 0
+            return 0
+        return user32.DefWindowProcW(hwnd, msg, wp, lp)
+
+    wnd_proc = WNDPROC(_wndproc)
+    hinstance = kernel32.GetModuleHandleW(None)
+    cls_name = "LikeMoveAbout"
+
+    wc = WNDCLASSEXW()
+    wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
+    wc.lpfnWndProc = wnd_proc
+    wc.hInstance = hinstance
+    wc.lpszClassName = cls_name
+
+    if not user32.RegisterClassExW(ctypes.byref(wc)):
+        gdi32.DeleteObject(hbmp)
+        return
+
+    # Center on screen
+    sx = user32.GetSystemMetrics(0)
+    sy = user32.GetSystemMetrics(1)
+    x = (sx - W) // 2
+    y = (sy - H) // 2
+
+    hwnd = user32.CreateWindowExW(
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        cls_name,
+        "like-move",
+        WS_POPUP,
+        x,
+        y,
+        W,
+        H,
+        None,
+        None,
+        hinstance,
+        None,
+    )
+    if not hwnd:
+        gdi32.DeleteObject(hbmp)
+        user32.UnregisterClassW(cls_name, hinstance)
+        return
+
+    # Prepare DCs
+    hdc_screen = user32.GetDC(None)
+    hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+    old_bmp = gdi32.SelectObject(hdc_mem, hbmp)
+
+    pt_src = POINT(0, 0)
+    pt_dst = POINT(x, y)
+    sz = SIZE(W, H)
+
+    def _update():
+        bf = BLENDFUNCTION(AC_SRC_OVER, 0, 255, 1)
+        user32.UpdateLayeredWindow(hwnd, hdc_screen, ctypes.byref(pt_dst), ctypes.byref(sz), hdc_mem, ctypes.byref(pt_src), 0, ctypes.byref(bf), ULW_ALPHA)
+
+    # Optionally hide tray icon to make modal
+    try:
+        if icon is not None:
+            try:
+                icon.visible = False
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    _update()
+    user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
+
+    # Message loop until window destroyed
+    msg = wintypes.MSG()
+    while user32.IsWindow(hwnd):
+        while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+        time.sleep(0.01)
+
+    # Cleanup
+    gdi32.SelectObject(hdc_mem, old_bmp)
+    gdi32.DeleteDC(hdc_mem)
+    user32.ReleaseDC(None, hdc_screen)
+    gdi32.DeleteObject(hbmp)
+    user32.UnregisterClassW(cls_name, hinstance)
+
+    # Restore tray icon visibility
+    try:
+        if icon is not None:
+            try:
+                icon.visible = True
+            except Exception:
+                pass
+    except Exception:
+        pass
