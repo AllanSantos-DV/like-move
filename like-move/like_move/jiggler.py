@@ -5,9 +5,11 @@ import ctypes.wintypes
 import logging
 import threading
 import time
+from typing import Optional
 
-from .config import CHECK_INTERVAL_SECONDS, JIGGLE_PIXELS, JigglerState
+from .config import CHECK_INTERVAL_SECONDS, JIGGLE_PIXELS, JigglerState, TriggerMode
 from .detector import get_idle_time_ms, is_screen_locked
+from .device_monitor import DeviceBaseline
 
 logger = logging.getLogger(__name__)
 
@@ -113,10 +115,15 @@ class MonitorThread(threading.Thread):
         self._state = state
         self._stop_event = threading.Event()
         self._last_jiggle_time: float = 0.0
+        self._device_baseline: Optional[DeviceBaseline] = None
 
     def stop(self) -> None:
         """Sinaliza a thread para parar graciosamente."""
         self._stop_event.set()
+
+    def reset_device_baseline(self) -> None:
+        """Reset device baseline so it recaptures on next KVM check."""
+        self._device_baseline = None
 
     def run(self) -> None:
         """Loop principal de monitoramento."""
@@ -141,22 +148,38 @@ class MonitorThread(threading.Thread):
         if is_screen_locked():
             return
 
-        idle_ms = get_idle_time_ms()
-        idle_seconds = idle_ms / 1000.0
-        threshold = self._state.idle_threshold
+        mode = self._state.trigger_mode
+        should_jiggle = False
 
-        if idle_seconds < threshold:
+        # IDLE or BOTH: check idle threshold
+        if mode in (TriggerMode.IDLE, TriggerMode.BOTH):
+            idle_ms = get_idle_time_ms()
+            idle_seconds = idle_ms / 1000.0
+            if idle_seconds >= self._state.idle_threshold:
+                should_jiggle = True
+
+        # KVM or BOTH: check device disconnection
+        if mode in (TriggerMode.KVM, TriggerMode.BOTH):
+            if self._device_baseline is None:
+                self._device_baseline = DeviceBaseline()
+            if self._device_baseline.has_disconnection(self._state.monitor_devices):
+                should_jiggle = True
+            else:
+                # Counts restored — refresh baseline for next comparison
+                self._device_baseline.refresh()
+
+        # ALWAYS: jiggle continuously
+        if mode == TriggerMode.ALWAYS:
+            should_jiggle = True
+
+        if not should_jiggle:
             return
 
-        # Idle acima do threshold — verificar intervalo entre jiggles
+        # Respect jiggle interval
         now = time.monotonic()
         elapsed = now - self._last_jiggle_time
 
         if elapsed >= self._state.jiggle_interval:
             if jiggle_mouse():
-                logger.debug(
-                    "Jiggle executado (idle=%.1fs, threshold=%ds)",
-                    idle_seconds,
-                    threshold,
-                )
+                logger.debug("Jiggle executado (mode=%s)", mode.value)
             self._last_jiggle_time = now
