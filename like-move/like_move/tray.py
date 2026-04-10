@@ -1,6 +1,5 @@
 """System tray icon com pystray para controle do jiggler."""
 
-import ctypes
 import logging
 from typing import Any, Optional
 
@@ -9,7 +8,6 @@ from pystray import Icon, Menu, MenuItem
 import threading
 
 
-from . import __version__
 from .config import JigglerState, TriggerMode
 from .device_monitor import DeviceMonitor
 from .jiggler import MonitorThread

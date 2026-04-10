@@ -1,10 +1,7 @@
 import ctypes
 import ctypes.wintypes as wintypes
 import logging
-import os
-import sys
 import time
-import threading
 
 from PIL import Image, ImageDraw, ImageFont
 
