@@ -36,6 +36,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('assets/like-move.ico', 'assets'),
+        ('VERSION', '.'),
     ],
     hiddenimports=pystray_hiddenimports + pil_hiddenimports + app_hiddenimports,
     hookspath=[],

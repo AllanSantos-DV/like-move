@@ -88,13 +88,31 @@ def _show_about_impl(icon) -> None:
         "• Modo: Escolha entre Inatividade, KVM, Ambos ou Sempre\n"
         "• Threshold: Tempo de espera antes de começar (15s a 5min)\n"
         "• Dispositivos KVM: Escolha quais dispositivos monitorar\n\n"
-        "Ícone verde = ativo | Ícone cinza = pausado\n\n"
-        "github.com/AllanSantos-DV/like-move"
+        "Ícone verde = ativo | Ícone cinza = pausado\n"
     )
     # draw multiline text with some margin
     text_x = 24
     text_y = 110
     draw.multiline_text((text_x, text_y), body, font=font_sub, fill=(15, 80, 45, 220), spacing=4)
+
+    # Draw clickable GitHub link separately (underlined, blue)
+    link_text = "github.com/AllanSantos-DV/like-move"
+    # compute body bbox to position link below body
+    try:
+        body_bbox = draw.multiline_textbbox((text_x, text_y), body, font=font_sub, spacing=4)
+    except AttributeError:
+        # older Pillow fallback: approximate by measuring last line
+        last = body.splitlines()[-1]
+        lb = draw.textbbox((text_x, text_y), last, font=font_sub)
+        body_bbox = (lb[0], lb[1], lb[2], lb[3])
+    link_x = text_x
+    link_y = body_bbox[3] + 8
+    draw.text((link_x, link_y), link_text, font=font_sub, fill=(10, 50, 120, 255))
+    # underline
+    lt_bbox = draw.textbbox((link_x, link_y), link_text, font=font_sub)
+    draw.line([(lt_bbox[0], lt_bbox[3] + 2), (lt_bbox[2], lt_bbox[3] + 2)], fill=(10, 50, 120, 255), width=1)
+    # save link rect for hit-testing
+    link_rect = {"x1": lt_bbox[0], "y1": lt_bbox[1], "x2": lt_bbox[2], "y2": lt_bbox[3]}
 
     # OK button
     btn_w, btn_h = 120, 36
@@ -145,6 +163,14 @@ def _show_about_impl(icon) -> None:
             x = lp & 0xFFFF
             y = (lp >> 16) & 0xFFFF
             clicked["down"] = False
+            # Check GitHub link
+            try:
+                if link_rect["x1"] <= x <= link_rect["x2"] and link_rect["y1"] <= y <= link_rect["y2"]:
+                    import webbrowser
+                    webbrowser.open("https://github.com/AllanSantos-DV/like-move")
+                    return 0
+            except Exception:
+                pass
             # Check OK button
             if btn_x1 <= x <= btn_x2 and btn_y1 <= y <= btn_y2:
                 user32.DestroyWindow(hwnd)
