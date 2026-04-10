@@ -35,7 +35,7 @@ user32.DefWindowProcW.restype = wintypes.LPARAM
 
 
 W: int = 420
-H: int = 360
+H: int = 440
 
 
 def show_about(icon=None) -> None:
@@ -94,7 +94,7 @@ def _show_about_impl(icon) -> None:
     # draw multiline text with some margin
     text_x = 24
     text_y = 110
-    draw.multiline_text((text_x, text_y), body, font=font_sub, fill=(255, 255, 255, 220), spacing=4)
+    draw.multiline_text((text_x, text_y), body, font=font_sub, fill=(15, 80, 45, 220), spacing=4)
 
     # OK button
     btn_w, btn_h = 120, 36
@@ -118,8 +118,8 @@ def _show_about_impl(icon) -> None:
     x_size = 12
     x_cx = W - x_margin
     x_cy = x_margin
-    draw.line([(x_cx - x_size // 2, x_cy - x_size // 2), (x_cx + x_size // 2, x_cy + x_size // 2)], fill=(255, 255, 255, 220), width=2)
-    draw.line([(x_cx + x_size // 2, x_cy - x_size // 2), (x_cx - x_size // 2, x_cy + x_size // 2)], fill=(255, 255, 255, 220), width=2)
+    draw.line([(x_cx - x_size // 2, x_cy - x_size // 2), (x_cx + x_size // 2, x_cy + x_size // 2)], fill=(15, 80, 45, 220), width=2)
+    draw.line([(x_cx + x_size // 2, x_cy - x_size // 2), (x_cx - x_size // 2, x_cy + x_size // 2)], fill=(15, 80, 45, 220), width=2)
 
     # Convert to HBITMAP
     hbmp = _pil_to_hbitmap(img)
