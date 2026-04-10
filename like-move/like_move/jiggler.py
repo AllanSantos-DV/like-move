@@ -9,7 +9,7 @@ from typing import Optional
 
 from .config import CHECK_INTERVAL_SECONDS, JIGGLE_PIXELS, JigglerState, TriggerMode
 from .detector import get_idle_time_ms, is_screen_locked
-from .device_monitor import DeviceBaseline
+from .device_monitor import DeviceMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -115,15 +115,15 @@ class MonitorThread(threading.Thread):
         self._state = state
         self._stop_event = threading.Event()
         self._last_jiggle_time: float = 0.0
-        self._device_baseline: Optional[DeviceBaseline] = None
+        self._device_monitor: Optional[DeviceMonitor] = None
 
     def stop(self) -> None:
         """Sinaliza a thread para parar graciosamente."""
         self._stop_event.set()
 
-    def reset_device_baseline(self) -> None:
-        """Reset device baseline so it recaptures on next KVM check."""
-        self._device_baseline = None
+    def set_device_monitor(self, monitor: Optional[DeviceMonitor]) -> None:
+        """Set or clear the device monitor reference."""
+        self._device_monitor = monitor
 
     def run(self) -> None:
         """Loop principal de monitoramento."""
@@ -158,15 +158,10 @@ class MonitorThread(threading.Thread):
             if idle_seconds >= self._state.idle_threshold:
                 should_jiggle = True
 
-        # KVM or BOTH: check device disconnection
+        # KVM or BOTH: check device disconnection flag (event-driven)
         if mode in (TriggerMode.KVM, TriggerMode.BOTH):
-            if self._device_baseline is None:
-                self._device_baseline = DeviceBaseline()
-            if self._device_baseline.has_disconnection(self._state.monitor_devices):
+            if self._device_monitor is not None and self._device_monitor.device_disconnected:
                 should_jiggle = True
-            else:
-                # Counts restored — refresh baseline for next comparison
-                self._device_baseline.refresh()
 
         # ALWAYS: jiggle continuously
         if mode == TriggerMode.ALWAYS:
