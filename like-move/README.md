@@ -1,62 +1,118 @@
 # like-move 🖱️
 
-Mouse jiggler inteligente para Windows que previne bloqueio de tela por inatividade.
+**Mouse jiggler inteligente para Windows** — previne bloqueio de tela por inatividade, com suporte especial a KVM switches.
 
-## Para quê serve?
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Release](https://img.shields.io/github/v/release/allansantos/like-move?display_name=tag&label=release)
+![Windows Only](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows)
 
-Se você tem 2 PCs (ex: desktop + notebook) compartilhando 1 tela/mouse/teclado via **KVM switch**, quando alterna pro desktop, o notebook bloqueia a tela por inatividade. O **like-move** resolve isso fazendo micro-movimentos do mouse quando detecta que você não está usando aquele PC.
+---
 
-## Como funciona
+## 📸 Screenshot
 
-1. **Detecta inatividade** — Monitora o tempo desde o último input real (mouse/teclado) via `GetLastInputInfo` (Win32 API)
-2. **Faz jiggle** — Quando idle > threshold (padrão: 30s), move o cursor 1px ida e volta usando `SendInput` — imperceptível, mas reseta o timer de inatividade do Windows
-3. **Detecta tela bloqueada** — Se a tela já está bloqueada, não faz jiggle (seria inútil)
-4. **Roda na bandeja** — Ícone na system tray com menu para ativar/desativar, configurar threshold e sair
+<!-- TODO: Adicionar screenshot do system tray com menu aberto -->
+*Em breve: screenshot do ícone na bandeja com o menu de contexto.*
 
-## Requisitos
+---
 
-- **Windows** (7, 8, 10, 11)
-- **Python 3.8+**
-- **Sem necessidade de admin** — todas as APIs usadas são user-space
+## ✨ Features
 
-## Instalação
+- **4 modos de trigger**: Inatividade, KVM (event-driven), Ambos ou Sempre
+- **Detecção de KVM via eventos do Windows** — usa `WM_DEVICECHANGE` (event-driven, sem polling)
+- **Detecção de tela bloqueada** — não faz jiggle desnecessário quando a tela já está no Secure Desktop
+- **System tray** — ícone colorido (🟢 ativo / ⚫ pausado) com menu completo
+- **Configurável** — threshold de inatividade, dispositivos monitorados, modo de trigger
+- **Standalone** — executável `.exe` único via PyInstaller, sem dependências externas
+- **Sem admin** — todas as APIs são user-space (Win32 via ctypes)
+
+---
+
+## 📥 Download
+
+Baixe a versão mais recente na [página de releases](../../releases/latest):
+
+> **[⬇ like-move.exe](../../releases/latest)** — executável standalone, não requer Python nem instalação.
+
+Basta baixar e executar. O ícone aparece na bandeja do sistema (system tray).
+
+---
+
+## 🚀 Instalação
+
+### Executável standalone (recomendado)
+
+1. Baixe `like-move.exe` na [página de releases](../../releases/latest)
+2. Execute — o ícone aparece na bandeja do sistema
+3. Pronto! Não requer Python, admin ou instalação
+
+### Desenvolvimento (Python)
 
 ```bash
-# Instalar dependências (--user se não tiver admin)
-pip install --user -r requirements.txt
-```
+# Clonar repositório
+git clone https://github.com/allansantos/like-move.git
+cd like-move/like-move
 
-## Uso
+# Instalar dependências
+pip install -r requirements.txt
 
-```bash
-# Com janela de console (útil para debug/logs)
-python main.pyw
-
-# Sem janela de console (uso normal)
+# Executar (sem janela de console)
 pythonw main.pyw
+
+# Ou com console (útil para debug/logs)
+python main.pyw
 ```
 
-O ícone aparece na bandeja do sistema (system tray):
-- 🟢 **Verde** = ativo
-- ⚫ **Cinza** = pausado
+**Requisitos**: Windows 7/8/10/11 · Python 3.8+
+
+---
+
+## 🖥️ Uso
+
+Ao executar, o like-move aparece como ícone na bandeja do sistema:
+
+| Ícone | Estado |
+|-------|--------|
+| 🟢 Verde | Ativo — monitorando e fazendo jiggle quando necessário |
+| ⚫ Cinza | Pausado — nenhum jiggle sendo feito |
 
 ### Menu do tray
 
 | Opção | Descrição |
 |-------|-----------|
-| ✓ Ativo / ✗ Pausado | Liga/desliga o jiggler |
-| Threshold | Configura tempo de inatividade (15s, 30s, 1min, 2min, 5min) |
-| Sair | Encerra o programa |
+| **Ativo** | Liga/desliga o jiggler (checkbox) |
+| **Modo →** | Seleciona modo de trigger (Inatividade, KVM, Ambos, Sempre) |
+| **Dispositivos KVM →** | Seleciona quais dispositivos monitorar (visível nos modos KVM/Ambos) |
+| **Threshold →** | Tempo de inatividade antes do jiggle (15s, 30s, 1min, 2min, 5min) |
+| **Sair** | Encerra o programa |
 
-## Como funciona por baixo
+---
 
-| Componente | API Win32 | Descrição |
-|-----------|-----------|-----------|
-| Detecção de idle | `GetLastInputInfo` + `GetTickCount64` | Calcula tempo desde último input |
-| Detecção de tela bloqueada | `OpenInputDesktopW` | Retorna NULL quando tela está no Secure Desktop |
-| Mouse jiggle | `SendInput` (MOUSEEVENTF_MOVE) | Movimento relativo +1px/-1px — mais confiável que SetCursorPos |
+## 🎯 Modos de Trigger
 
-## Configuração
+| Modo | Comportamento |
+|------|--------------|
+| **Inatividade** | Jiggle quando o tempo sem input (mouse/teclado) ultrapassa o threshold. Modo clássico de mouse jiggler. |
+| **KVM** | Jiggle quando um dispositivo monitorado desconecta (ex: KVM trocou para outro PC). Usa `WM_DEVICECHANGE` — event-driven, sem polling. |
+| **Ambos** | Ativa o jiggle se **qualquer** condição for atendida (inatividade OU desconexão KVM). |
+| **Sempre** | Jiggle contínuo enquanto o programa estiver ativo. Controle manual via toggle no tray. |
+
+---
+
+## 🔌 Dispositivos KVM
+
+Nos modos **KVM** e **Ambos**, você pode selecionar quais dispositivos monitorar:
+
+| Dispositivo | O que monitora | API |
+|-------------|---------------|-----|
+| **Monitor** | Contagem de monitores conectados | `GetSystemMetrics(SM_CMONITORS)` |
+| **Mouse** | Dispositivos de mouse raw input | `GetRawInputDeviceList` (RIM_TYPEMOUSE) |
+| **Teclado** | Dispositivos de teclado raw input | `GetRawInputDeviceList` (RIM_TYPEKEYBOARD) |
+
+O like-move captura uma **baseline** na inicialização. Se a contagem de algum dispositivo monitorado cair abaixo da baseline, considera-se uma desconexão (= KVM trocou para outro PC) e o jiggle é ativado.
+
+---
+
+## ⚙️ Configuração
 
 Os valores padrão estão em `like_move/config.py`:
 
@@ -67,48 +123,84 @@ Os valores padrão estão em `like_move/config.py`:
 | `CHECK_INTERVAL_SECONDS` | 1 | Intervalo de checagem do estado |
 | `JIGGLE_PIXELS` | 1 | Pixels de movimento (ida e volta) |
 
-## Build (standalone .exe)
+---
 
-Para gerar um executável standalone que roda sem Python instalado:
+## 🔧 Como funciona
 
-```powershell
-# Instalar dependências de build
-pip install --user pyinstaller
+O like-move usa exclusivamente APIs Win32 via `ctypes` — sem `pywin32`, sem dependências nativas.
 
-# Gerar o .exe (usa like-move.spec)
-.\build.ps1
+| Componente | API Win32 | Descrição |
+|-----------|-----------|-----------|
+| Detecção de idle | `GetLastInputInfo` + `GetTickCount64` | Calcula tempo desde último input real |
+| Detecção de tela bloqueada | `OpenInputDesktopW` | Retorna `NULL` quando a tela está no Secure Desktop |
+| Mouse jiggle | `SendInput` (`MOUSEEVENTF_MOVE`) | Movimento relativo +1px/−1px — imperceptível, reseta timer do Windows |
+| Detecção de KVM | `WM_DEVICECHANGE` + hidden window | Event-driven: janela oculta recebe broadcasts de mudança de dispositivo |
+| Contagem de dispositivos | `GetSystemMetrics`, `GetRawInputDeviceList` | Monitores, mouses e teclados conectados |
+
+### Arquitetura
+
+```
+main.pyw                  → Entry point (sem console com pythonw)
+like_move/
+├── config.py             → Constantes e estado mutável (TriggerMode, JigglerState)
+├── detector.py           → Detecção de idle e tela bloqueada (ctypes)
+├── device_monitor.py     → Monitor de dispositivos event-driven (WM_DEVICECHANGE)
+├── jiggler.py            → Lógica de jiggle via SendInput + thread de monitoramento
+└── tray.py               → System tray icon com pystray + menu configurável
 ```
 
-O executável é gerado em `dist/like-move.exe`. Basta copiar e rodar — não requer Python, admin ou instalação.
+**Threads:**
+- **Principal** — event loop do pystray (system tray)
+- **Monitor** — thread daemon que checa idle/KVM e faz jiggle
+- **DeviceMonitor** — thread daemon com message pump Win32 para `WM_DEVICECHANGE`
 
-Para build manual sem o script:
+---
 
-```bash
+## 🏗️ Build
+
+### Build local
+
+```powershell
+# Instalar dependências
+pip install -r requirements.txt pyinstaller
+
+# Build via script
+.\build.ps1
+
+# Ou build manual
 python -m PyInstaller like-move.spec --noconfirm
 ```
 
-### Regenerar ícone
+O executável é gerado em `dist/like-move.exe` (~25 MB, standalone).
 
-O ícone `assets/like-move.ico` é gerado via Pillow. Para regenerá-lo:
+### CI/CD
+
+O repositório inclui GitHub Actions workflow que gera automaticamente uma release com o `.exe` ao criar uma tag `v*`:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# → GitHub Actions builda e publica like-move.exe na release
+```
+
+### Regenerar ícone
 
 ```bash
 python assets/generate_ico.py
 ```
 
-## Arquitetura
+---
 
-```
-main.pyw              → Entry point (sem console com pythonw)
-like_move/
-├── config.py         → Constantes de configuração
-├── detector.py       → Detecção de idle e tela bloqueada (ctypes)
-├── jiggler.py        → Lógica de jiggle via SendInput + thread de monitoramento
-└── tray.py           → System tray icon com pystray
-```
+## 🤝 Contribuição
 
-- **Thread principal**: event loop do pystray (system tray)
-- **Thread daemon**: loop de monitoramento que checa idle e faz jiggle
+1. Fork o repositório
+2. Crie uma branch para sua feature (`git checkout -b feature/minha-feature`)
+3. Commit suas mudanças (`git commit -m 'feat: minha feature'`)
+4. Push para a branch (`git push origin feature/minha-feature`)
+5. Abra um Pull Request
 
-## Licença
+---
 
-MIT
+## 📄 Licença
+
+[MIT](../LICENSE) © Allan Santos
