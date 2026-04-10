@@ -235,6 +235,12 @@ class TrayApp:
         self._monitor = MonitorThread(self._state)
         self._monitor.start()
         self._ensure_device_monitor()
+
+        # Toast notification via pystray (balloon/Action Center)
+        icon.notify(
+            "like-move está rodando — clique direito para configurar",
+            "like-move",
+        )
         logger.info("like-move iniciado — ícone na bandeja do sistema")
 
     def _ensure_device_monitor(self) -> None:
