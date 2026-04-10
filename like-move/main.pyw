@@ -28,6 +28,11 @@ def main() -> None:
 
     logger.info("Iniciando like-move v1.0.0...")
 
+    # Splash screen com fade animation (~2.5 s)
+    from like_move.splash import show_splash
+
+    show_splash()
+
     from like_move.tray import TrayApp
 
     app = TrayApp()
