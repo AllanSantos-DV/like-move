@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
 
 from .config import JigglerState, TriggerMode
+from .device_monitor import DeviceMonitor
 from .jiggler import MonitorThread
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ class TrayApp:
     def __init__(self) -> None:
         self._state = JigglerState()
         self._monitor: Optional[MonitorThread] = None
+        self._device_monitor: Optional[DeviceMonitor] = None
         self._icon: Optional[Icon] = None
 
     def _on_toggle(self, icon: Icon, item: MenuItem) -> None:
@@ -101,8 +103,7 @@ class TrayApp:
         """Retorna callback para definir trigger mode."""
         def handler(icon: Icon, item: MenuItem) -> None:
             self._state.trigger_mode = mode
-            if self._monitor:
-                self._monitor.reset_device_baseline()
+            self._ensure_device_monitor()
             logger.info("Trigger mode alterado para %s", mode.value)
         return handler
 
@@ -126,8 +127,10 @@ class TrayApp:
             else:
                 self._state.monitor_devices.add(device)
                 logger.info("Dispositivo adicionado: %s", device)
-            if self._monitor:
-                self._monitor.reset_device_baseline()
+            if self._device_monitor:
+                self._device_monitor.update_monitor_devices(
+                    self._state.monitor_devices
+                )
         return handler
 
     def _is_device_checked(self, device: str) -> Any:
@@ -141,6 +144,9 @@ class TrayApp:
         logger.info("Encerrando like-move...")
         if self._monitor:
             self._monitor.stop()
+        if self._device_monitor:
+            self._device_monitor.stop()
+            self._device_monitor = None
         icon.stop()
 
     def _build_menu(self) -> Menu:
@@ -206,7 +212,31 @@ class TrayApp:
 
         self._monitor = MonitorThread(self._state)
         self._monitor.start()
+        self._ensure_device_monitor()
         logger.info("like-move iniciado — ícone na bandeja do sistema")
+
+    def _ensure_device_monitor(self) -> None:
+        """Create or destroy DeviceMonitor based on current trigger mode."""
+        needs_kvm = self._state.trigger_mode in (
+            TriggerMode.KVM,
+            TriggerMode.BOTH,
+        )
+
+        if needs_kvm and self._device_monitor is None:
+            self._device_monitor = DeviceMonitor(self._state.monitor_devices)
+            self._device_monitor.start()
+            if self._monitor:
+                self._monitor.set_device_monitor(self._device_monitor)
+            logger.info("Device monitor criado (event-driven)")
+        elif not needs_kvm and self._device_monitor is not None:
+            if self._monitor:
+                self._monitor.set_device_monitor(None)
+            self._device_monitor.stop()
+            self._device_monitor = None
+            logger.info("Device monitor destruído")
+        elif needs_kvm and self._device_monitor is not None:
+            # Mode still includes KVM — refresh baseline
+            self._device_monitor.refresh_baseline()
 
     def run(self) -> None:
         """Inicia a aplicação (blocking)."""
