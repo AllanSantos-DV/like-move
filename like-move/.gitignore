@@ -9,6 +9,9 @@ build/
 *.egg-info/
 *.egg
 
+# PyInstaller
+*.exe
+
 # Virtual environments
 venv/
 .venv/
