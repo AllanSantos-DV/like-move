@@ -165,9 +165,9 @@ def _render_splash() -> Image.Image:
         font_title = ImageFont.load_default()
         font_sub = font_title
 
-    _draw_centered(draw, "like-move", 96, font_title, (255, 255, 255, 255), w)
-    _draw_centered(draw, f"v{__version__}", 130, font_sub, (255, 255, 255, 180), w)
-    _draw_centered(draw, "Iniciando…", 160, font_sub, (255, 255, 255, 150), w)
+    _draw_centered(draw, "like-move", 96, font_title, (15, 80, 45, 255), w)
+    _draw_centered(draw, f"v{__version__}", 130, font_sub, (15, 80, 45, 200), w)
+    _draw_centered(draw, "Iniciando…", 160, font_sub, (15, 80, 45, 180), w)
 
     return img
 

@@ -74,8 +74,8 @@ def _show_about_impl(icon) -> None:
         font_sub = font_title
 
     # Title and version
-    _draw_centered(draw, "like-move", 28, font_title, (255, 255, 255, 255), W)
-    _draw_centered(draw, f"v{__version__}", 64, font_sub, (255, 255, 255, 200), W)
+    _draw_centered(draw, "like-move", 28, font_title, (15, 80, 45, 255), W)
+    _draw_centered(draw, f"v{__version__}", 64, font_sub, (15, 80, 45, 200), W)
 
     # Body text (left-aligned)
     body = (
