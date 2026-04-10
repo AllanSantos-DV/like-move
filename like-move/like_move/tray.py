@@ -6,6 +6,8 @@ from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
+import threading
+
 
 from . import __version__
 from .config import JigglerState, TriggerMode
@@ -143,22 +145,18 @@ class TrayApp:
 
     def _on_about(self, icon: Icon, item: MenuItem) -> None:
         """Exibe diálogo 'Sobre' com informações do app."""
-        text = (
-            f"like-move v{__version__}\n"
-            "Mouse jiggler inteligente para Windows\n"
-            "\n"
-            "Como usar:\n"
-            "• Clique direito no ícone para acessar o menu\n"
-            "• Ativo: Liga/desliga o jiggler\n"
-            "• Modo: Escolha entre Inatividade, KVM, Ambos ou Sempre\n"
-            "• Threshold: Tempo de espera antes de começar (15s a 5min)\n"
-            "• Dispositivos KVM: Escolha quais dispositivos monitorar\n"
-            "\n"
-            "Ícone verde = ativo | Ícone cinza = pausado\n"
-            "\n"
-            "github.com/AllanSantos-DV/like-move"
-        )
-        ctypes.windll.user32.MessageBoxW(0, text, "Sobre — like-move", 0x00000040)
+        # Use a dedicated thread so pystray callbacks are not blocked
+        try:
+            from . import about
+        except Exception:
+            logger.exception("Failed to import about module")
+            return
+
+        def _show():
+            about.show_about(icon=self._icon if self._icon is not None else None)
+
+        t = threading.Thread(target=_show, daemon=True)
+        t.start()
 
     def _on_quit(self, icon: Icon, item: MenuItem) -> None:
         """Encerra a aplicação."""
