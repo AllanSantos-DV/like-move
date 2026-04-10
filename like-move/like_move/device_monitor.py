@@ -7,7 +7,6 @@ and comparing against a baseline captured at startup or mode switch.
 import ctypes
 import ctypes.wintypes
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
