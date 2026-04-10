@@ -6,13 +6,28 @@ from typing import Any, Optional
 from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
 
-from .config import JigglerState
+from .config import JigglerState, TriggerMode
 from .jiggler import MonitorThread
 
 logger = logging.getLogger(__name__)
 
 # Thresholds disponíveis no menu (segundos)
 THRESHOLD_OPTIONS: list[int] = [15, 30, 60, 120, 300]
+
+# Mapping: TriggerMode → display label
+_MODE_LABELS: dict[TriggerMode, str] = {
+    TriggerMode.IDLE: "Inatividade",
+    TriggerMode.KVM: "KVM",
+    TriggerMode.BOTH: "Ambos",
+    TriggerMode.ALWAYS: "Sempre",
+}
+
+# Mapping: device key → display label
+_DEVICE_LABELS: dict[str, str] = {
+    "monitor": "Monitor",
+    "mouse": "Mouse",
+    "keyboard": "Teclado",
+}
 
 
 def create_icon_image(enabled: bool = True) -> Image.Image:
@@ -82,6 +97,45 @@ class TrayApp:
             return self._state.idle_threshold == seconds
         return check
 
+    def _on_set_mode(self, mode: TriggerMode) -> Any:
+        """Retorna callback para definir trigger mode."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.trigger_mode = mode
+            if self._monitor:
+                self._monitor.reset_device_baseline()
+            logger.info("Trigger mode alterado para %s", mode.value)
+        return handler
+
+    def _is_mode_checked(self, mode: TriggerMode) -> Any:
+        """Retorna callback para verificar se mode está selecionado."""
+        def check(item: MenuItem) -> bool:
+            return self._state.trigger_mode == mode
+        return check
+
+    def _on_toggle_device(self, device: str) -> Any:
+        """Retorna callback para toggle de dispositivo monitorado."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            if device in self._state.monitor_devices:
+                # Don't allow removing the last device
+                if len(self._state.monitor_devices) > 1:
+                    self._state.monitor_devices.discard(device)
+                    logger.info("Dispositivo removido: %s", device)
+                else:
+                    logger.info("Pelo menos um dispositivo deve estar ativo")
+                    return
+            else:
+                self._state.monitor_devices.add(device)
+                logger.info("Dispositivo adicionado: %s", device)
+            if self._monitor:
+                self._monitor.reset_device_baseline()
+        return handler
+
+    def _is_device_checked(self, device: str) -> Any:
+        """Retorna callback para verificar se dispositivo está monitorado."""
+        def check(item: MenuItem) -> bool:
+            return device in self._state.monitor_devices
+        return check
+
     def _on_quit(self, icon: Icon, item: MenuItem) -> None:
         """Encerra a aplicação."""
         logger.info("Encerrando like-move...")
@@ -91,6 +145,28 @@ class TrayApp:
 
     def _build_menu(self) -> Menu:
         """Constrói o menu de contexto do tray."""
+        # Mode submenu (radio)
+        mode_items = [
+            MenuItem(
+                _MODE_LABELS[mode],
+                self._on_set_mode(mode),
+                checked=self._is_mode_checked(mode),
+                radio=True,
+            )
+            for mode in TriggerMode
+        ]
+
+        # KVM device submenu (checkable, visible when mode includes KVM)
+        device_items = [
+            MenuItem(
+                _DEVICE_LABELS[device],
+                self._on_toggle_device(device),
+                checked=self._is_device_checked(device),
+            )
+            for device in ("monitor", "mouse", "keyboard")
+        ]
+
+        # Threshold submenu
         threshold_items = [
             MenuItem(
                 _format_threshold(s),
@@ -108,6 +184,13 @@ class TrayApp:
                 checked=lambda item: self._state.enabled,
             ),
             Menu.SEPARATOR,
+            MenuItem("Modo", Menu(*mode_items)),
+            MenuItem(
+                "Dispositivos KVM",
+                Menu(*device_items),
+                visible=lambda item: self._state.trigger_mode
+                in (TriggerMode.KVM, TriggerMode.BOTH),
+            ),
             MenuItem("Threshold", Menu(*threshold_items)),
             Menu.SEPARATOR,
             MenuItem("Sair", self._on_quit),
