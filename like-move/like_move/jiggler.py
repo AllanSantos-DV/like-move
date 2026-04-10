@@ -5,7 +5,6 @@ import ctypes.wintypes
 import logging
 import threading
 import time
-from typing import Optional
 
 from .config import CHECK_INTERVAL_SECONDS, JIGGLE_PIXELS, JigglerState
 from .detector import get_idle_time_ms, is_screen_locked
