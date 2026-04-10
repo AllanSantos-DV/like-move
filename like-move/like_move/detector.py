@@ -40,13 +40,14 @@ user32.GetLastInputInfo.restype = ctypes.wintypes.BOOL
 kernel32.GetTickCount64.argtypes = []
 kernel32.GetTickCount64.restype = ctypes.c_uint64
 
-# HDESK OpenInputDesktopW(DWORD dwFlags, BOOL fInherit, DWORD dwDesiredAccess)
-user32.OpenInputDesktopW.argtypes = [
+# HDESK OpenInputDesktop(DWORD dwFlags, BOOL fInherit, DWORD dwDesiredAccess)
+# Sem sufixo W — esta função não recebe strings
+user32.OpenInputDesktop.argtypes = [
     ctypes.wintypes.DWORD,
     ctypes.wintypes.BOOL,
     ctypes.wintypes.DWORD,
 ]
-user32.OpenInputDesktopW.restype = ctypes.wintypes.HANDLE
+user32.OpenInputDesktop.restype = ctypes.wintypes.HANDLE
 
 # BOOL CloseDesktop(HDESK hDesktop)
 user32.CloseDesktop.argtypes = [ctypes.wintypes.HANDLE]
@@ -88,7 +89,7 @@ def is_screen_locked() -> bool:
     fecha-o com CloseDesktop para evitar leak.
     """
     # Solicitar acesso mínimo (0) — só queremos saber se é acessível
-    hdesk = user32.OpenInputDesktopW(0, False, 0)
+    hdesk = user32.OpenInputDesktop(0, False, 0)
 
     if not hdesk:
         return True  # Tela bloqueada
