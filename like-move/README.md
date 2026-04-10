@@ -67,6 +67,34 @@ Os valores padrão estão em `like_move/config.py`:
 | `CHECK_INTERVAL_SECONDS` | 1 | Intervalo de checagem do estado |
 | `JIGGLE_PIXELS` | 1 | Pixels de movimento (ida e volta) |
 
+## Build (standalone .exe)
+
+Para gerar um executável standalone que roda sem Python instalado:
+
+```powershell
+# Instalar dependências de build
+pip install --user pyinstaller
+
+# Gerar o .exe (usa like-move.spec)
+.\build.ps1
+```
+
+O executável é gerado em `dist/like-move.exe`. Basta copiar e rodar — não requer Python, admin ou instalação.
+
+Para build manual sem o script:
+
+```bash
+python -m PyInstaller like-move.spec --noconfirm
+```
+
+### Regenerar ícone
+
+O ícone `assets/like-move.ico` é gerado via Pillow. Para regenerá-lo:
+
+```bash
+python assets/generate_ico.py
+```
+
 ## Arquitetura
 
 ```
