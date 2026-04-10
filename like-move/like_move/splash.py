@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 # ── Win32 DLLs ──────────────────────────────────────────────────────
 user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+# Ensure DefWindowProcW uses correct argument/return types to avoid LPARAM overflow on 64-bit
+user32.DefWindowProcW.argtypes = [wintypes.HWND, ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM]
+user32.DefWindowProcW.restype = wintypes.LPARAM
+
 gdi32 = ctypes.windll.gdi32  # type: ignore[attr-defined]
 kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 

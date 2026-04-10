@@ -29,6 +29,11 @@ from . import __version__
 
 logger = logging.getLogger(__name__)
 
+# Ensure DefWindowProcW uses correct argument/return types to avoid LPARAM overflow on 64-bit
+user32.DefWindowProcW.argtypes = [wintypes.HWND, ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM]
+user32.DefWindowProcW.restype = wintypes.LPARAM
+
+
 W: int = 420
 H: int = 360
 
