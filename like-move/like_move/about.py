@@ -192,7 +192,7 @@ def _show_about_impl(icon) -> None:
     wc.hInstance = hinstance
     wc.lpszClassName = cls_name
 
-    if not user32.RegisterClassExW(ctypes.byref(wc)):
+    if not user32.RegisterClassExW(ctypes.pointer(wc)): 
         gdi32.DeleteObject(hbmp)
         return
 
