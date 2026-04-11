@@ -1,37 +1,166 @@
 import ctypes
 import ctypes.wintypes as wintypes
 import logging
+import os
+import sys
 import time
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .splash import (
-    _asset_path,
-    _pil_to_hbitmap,
-    _draw_centered,
-    user32,
-    gdi32,
-    kernel32,
-    WNDPROC,
-    WNDCLASSEXW,
-    POINT,
-    SIZE,
-    BLENDFUNCTION,
-    WS_POPUP,
-    WS_EX_LAYERED,
-    WS_EX_TOPMOST,
-    WS_EX_TOOLWINDOW,
-    SW_SHOWNOACTIVATE,
-    ULW_ALPHA,
-    AC_SRC_OVER,
-)
 from . import __version__
 
 logger = logging.getLogger(__name__)
 
-# Ensure DefWindowProcW uses correct argument/return types to avoid LPARAM overflow on 64-bit
+# ── Win32 DLLs (private instances to avoid argtypes conflicts with pystray) ──
+user32 = ctypes.WinDLL("user32", use_last_error=True)
 user32.DefWindowProcW.argtypes = [wintypes.HWND, ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM]
 user32.DefWindowProcW.restype = wintypes.LPARAM
+
+gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+# ── Win32 constants ─────────────────────────────────────────────────
+WS_POPUP: int = 0x80000000
+WS_EX_LAYERED: int = 0x00080000
+WS_EX_TOPMOST: int = 0x00000008
+WS_EX_TOOLWINDOW: int = 0x00000080
+SW_SHOWNOACTIVATE: int = 4
+PM_REMOVE: int = 0x0001
+
+AC_SRC_OVER: int = 0x00
+AC_SRC_ALPHA: int = 0x01
+ULW_ALPHA: int = 0x02
+DIB_RGB_COLORS: int = 0
+BI_RGB: int = 0
+
+# ── WNDPROC callback type ──────────────────────────────────────────
+WNDPROC = ctypes.WINFUNCTYPE(
+    wintypes.LPARAM, wintypes.HWND,
+    ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM,
+)
+
+# ── Win32 structures (defined locally to avoid cross-module ctypes conflicts) ──
+
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", wintypes.DWORD),
+        ("biWidth", wintypes.LONG),
+        ("biHeight", wintypes.LONG),
+        ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD),
+        ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD),
+        ("biXPelsPerMeter", wintypes.LONG),
+        ("biYPelsPerMeter", wintypes.LONG),
+        ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    ]
+
+
+class BITMAPINFO(ctypes.Structure):
+    _fields_ = [("bmiHeader", BITMAPINFOHEADER)]
+
+
+class BLENDFUNCTION(ctypes.Structure):
+    _fields_ = [
+        ("BlendOp", ctypes.c_ubyte),
+        ("BlendFlags", ctypes.c_ubyte),
+        ("SourceConstantAlpha", ctypes.c_ubyte),
+        ("AlphaFormat", ctypes.c_ubyte),
+    ]
+
+
+class POINT(ctypes.Structure):
+    _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+
+
+class SIZE(ctypes.Structure):
+    _fields_ = [("cx", wintypes.LONG), ("cy", wintypes.LONG)]
+
+
+class WNDCLASSEXW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_uint),
+        ("style", ctypes.c_uint),
+        ("lpfnWndProc", WNDPROC),
+        ("cbClsExtra", ctypes.c_int),
+        ("cbWndExtra", ctypes.c_int),
+        ("hInstance", wintypes.HINSTANCE),
+        ("hIcon", wintypes.HICON),
+        ("hCursor", wintypes.HANDLE),
+        ("hbrBackground", wintypes.HBRUSH),
+        ("lpszMenuName", wintypes.LPCWSTR),
+        ("lpszClassName", wintypes.LPCWSTR),
+        ("hIconSm", wintypes.HICON),
+    ]
+
+
+# ── Helpers (local copies — no imports from splash) ─────────────────
+
+
+def _asset_path(filename: str) -> str:
+    """Resolve asset path for both source and PyInstaller bundle."""
+    if getattr(sys, "frozen", False):
+        base = sys._MEIPASS  # type: ignore[attr-defined]
+    else:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, "assets", filename)
+
+
+def _draw_centered(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    y: int,
+    font: ImageFont.FreeTypeFont,
+    fill: tuple[int, ...],
+    canvas_w: int,
+) -> None:
+    """Draw horizontally-centered text on the canvas."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    draw.text(((canvas_w - tw) // 2, y), text, fill=fill, font=font)
+
+
+def _pil_to_hbitmap(img: Image.Image) -> int:
+    """Convert Pillow RGBA image to pre-multiplied-alpha Win32 HBITMAP."""
+    w, h = img.size
+
+    flipped = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+    raw = bytearray(flipped.tobytes("raw", "BGRA"))
+
+    # Pre-multiply alpha (required by UpdateLayeredWindow)
+    for i in range(0, len(raw), 4):
+        a = raw[i + 3]
+        if a == 0:
+            raw[i] = raw[i + 1] = raw[i + 2] = 0
+        elif a < 255:
+            raw[i] = raw[i] * a // 255
+            raw[i + 1] = raw[i + 1] * a // 255
+            raw[i + 2] = raw[i + 2] * a // 255
+
+    bmi = BITMAPINFO()
+    bmi.bmiHeader.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+    bmi.bmiHeader.biWidth = w
+    bmi.bmiHeader.biHeight = h
+    bmi.bmiHeader.biPlanes = 1
+    bmi.bmiHeader.biBitCount = 32
+    bmi.bmiHeader.biCompression = BI_RGB
+
+    hdc = user32.GetDC(None)
+    bits = ctypes.c_void_p()
+    hbmp = gdi32.CreateDIBSection(
+        hdc,
+        ctypes.byref(bmi),
+        DIB_RGB_COLORS,
+        ctypes.byref(bits),
+        None,
+        0,
+    )
+    if hbmp and bits:
+        ctypes.memmove(bits, bytes(raw), len(raw))
+    user32.ReleaseDC(None, hdc)
+    return hbmp
 
 
 W: int = 420
@@ -192,7 +321,7 @@ def _show_about_impl(icon) -> None:
     wc.hInstance = hinstance
     wc.lpszClassName = cls_name
 
-    if not user32.RegisterClassExW(ctypes.pointer(wc)): 
+    if not user32.RegisterClassExW(ctypes.byref(wc)):
         gdi32.DeleteObject(hbmp)
         return
 
