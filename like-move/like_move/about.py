@@ -319,6 +319,10 @@ def _show_about_impl(icon) -> None:
     wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
     wc.lpfnWndProc = wnd_proc
     wc.hInstance = hinstance
+    # Ensure LoadCursorW has proper signatures and set the arrow cursor to avoid the loading cursor
+    user32.LoadCursorW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
+    user32.LoadCursorW.restype = wintypes.HANDLE
+    wc.hCursor = user32.LoadCursorW(None, 32512)  # IDC_ARROW
     wc.lpszClassName = cls_name
 
     if not user32.RegisterClassExW(ctypes.byref(wc)):
