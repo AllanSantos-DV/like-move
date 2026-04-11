@@ -28,6 +28,7 @@ pil_hiddenimports = [
 app_hiddenimports = [
     'like_move.about',
     'like_move.splash',
+    'like_move.startup',
 ]
 
 a = Analysis(
