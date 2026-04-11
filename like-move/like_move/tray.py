@@ -141,6 +141,25 @@ class TrayApp:
             return device in self._state.monitor_devices
         return check
 
+    def _is_startup_checked(self, item: MenuItem) -> bool:
+        """Verifica se o like-move está configurado para iniciar com o Windows."""
+        try:
+            from . import startup
+        except Exception:
+            return False
+        return startup.is_startup_enabled()
+
+    def _on_toggle_startup(self, icon: Icon, item: MenuItem) -> None:
+        """Alterna inicialização automática com o Windows."""
+        try:
+            from . import startup
+        except Exception:
+            logger.exception("Failed to import startup module")
+            return
+        new_state = startup.toggle_startup()
+        status = "ativado" if new_state else "desativado"
+        logger.info("Iniciar com Windows: %s", status)
+
     def _on_about(self, icon: Icon, item: MenuItem) -> None:
         """Exibe diálogo 'Sobre' com informações do app."""
         # Use a dedicated thread so pystray callbacks are not blocked
@@ -216,6 +235,11 @@ class TrayApp:
             ),
             MenuItem("Threshold", Menu(*threshold_items)),
             Menu.SEPARATOR,
+            MenuItem(
+                "Iniciar com Windows",
+                self._on_toggle_startup,
+                checked=self._is_startup_checked,
+            ),
             MenuItem("Sobre", self._on_about),
             MenuItem("Sair", self._on_quit),
         )
