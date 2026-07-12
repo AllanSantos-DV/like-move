@@ -10,6 +10,7 @@ from typing import Optional
 from .config import CHECK_INTERVAL_SECONDS, JIGGLE_PIXELS, JigglerState, TriggerMode
 from .detector import get_idle_time_ms, is_screen_locked
 from .device_monitor import DeviceMonitor
+from .wifi import is_on_trusted_network
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,11 @@ class MonitorThread(threading.Thread):
     def _check_and_jiggle(self) -> None:
         """Verifica condições e faz jiggle se necessário."""
         if not self._state.enabled:
+            return
+
+        # Gate de segurança: em rede não-confiável (Wi-Fi público/desconhecido),
+        # não faz jiggle — deixa a tela bloquear normalmente.
+        if self._state.trusted_only and not is_on_trusted_network(self._state):
             return
 
         # Não fazer jiggle se a tela está bloqueada (seria inútil)
