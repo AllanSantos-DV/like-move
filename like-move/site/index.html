@@ -257,7 +257,7 @@
       <a href="#como">Como funciona</a>
       <a href="#telas">Telas</a>
     </div>
-    <span class="nav-ver">v1.1.0</span>
+    <span class="nav-ver" data-ver data-prefix="v">v1.1.0</span>
     <a class="btn btn-primary" href="https://github.com/AllanSantos-DV/like-move/releases/latest">Baixar</a>
   </div>
 </nav>
@@ -418,7 +418,7 @@
   <div class="wrap foot-inner">
     <span>MIT © Allan Santos</span>
     <a href="https://github.com/AllanSantos-DV/like-move">github.com/AllanSantos-DV/like-move</a>
-    <span class="sp mono">like-move v1.1.0</span>
+    <span class="sp mono" data-ver data-prefix="like-move v">like-move v1.1.0</span>
   </div>
 </footer>
 
@@ -466,6 +466,23 @@
     }, 2600);
 
     setState();
+
+    // Versão dinâmica: lê o arquivo VERSION (empacotado ao lado do site pelo
+    // workflow de Pages). Quando o VERSION muda, a página reflete no próximo
+    // deploy — sem editar o HTML. Em preview local, mantém o texto de fallback.
+    (function loadVersion() {
+      var els = document.querySelectorAll('[data-ver]');
+      if (!els.length) return;
+      fetch('VERSION', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (t) {
+          if (!t) return;
+          var v = t.trim();
+          if (!v) return;
+          els.forEach(function (e) { e.textContent = (e.dataset.prefix || '') + v; });
+        })
+        .catch(function () { /* offline/local — mantém o fallback */ });
+    })();
   })();
 </script>
 </body>
