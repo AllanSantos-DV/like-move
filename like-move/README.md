@@ -8,10 +8,21 @@
 
 ---
 
-## 📸 Screenshot
+## 📸 Telas
 
-<!-- TODO: Adicionar screenshot do system tray com menu aberto -->
-*Em breve: screenshot do ícone na bandeja com o menu de contexto.*
+<p align="center">
+  <img src="site/assets/tray-active.png" width="72" alt="Ícone ativo (verde)" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="site/assets/tray-paused.png" width="72" alt="Ícone pausado (cinza)" />
+</p>
+
+<p align="center">
+  <img src="site/assets/splash.png" width="300" alt="Splash screen do like-move" />
+  &nbsp;&nbsp;
+  <img src="site/assets/about.png" width="270" alt="Janela Sobre do like-move" />
+</p>
+
+<p align="center"><sub>Ícone da bandeja (🟢 ativo / ⚫ pausado), splash e janela “Sobre” — telas geradas pelo próprio app (Pillow + Win32).</sub></p>
 
 ---
 
@@ -236,6 +247,15 @@ git push origin v1.0.0
 ```bash
 python assets/generate_ico.py
 ```
+
+### Regenerar as telas de preview
+
+```bash
+python assets/generate_previews.py
+# → gera site/assets/*.png a partir das telas reais do app (sem abrir janelas)
+```
+
+Há também uma página de vitrine estática em [`site/index.html`](site/index.html) (pronta para GitHub Pages).
 
 ---
 
