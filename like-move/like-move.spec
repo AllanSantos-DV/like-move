@@ -29,6 +29,9 @@ app_hiddenimports = [
     'like_move.about',
     'like_move.splash',
     'like_move.startup',
+    'like_move.settings',
+    'like_move.wifi',
+    'like_move.updater',
 ]
 
 a = Analysis(
@@ -48,16 +51,14 @@ a = Analysis(
         'tkinter',
         '_tkinter',
         'unittest',
-        'email',
-        'html',
-        'http',
-        'xml',
         'pydoc',
         'doctest',
         'argparse',
         'difflib',
         'multiprocessing',
         'socketserver',
+        # NOTE: não excluir 'http'/'email'/'xml' — urllib.request (auto-update)
+        # depende de http.client e email; removê-los quebra o updater no .exe.
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
