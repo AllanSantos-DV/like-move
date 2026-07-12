@@ -26,7 +26,9 @@ def main() -> None:
         logger.error("like-move só funciona no Windows.")
         sys.exit(1)
 
-    logger.info("Iniciando like-move v1.0.0...")
+    from like_move import __version__
+
+    logger.info("Iniciando like-move v%s...", __version__)
 
     # Splash screen com fade animation (~2.5 s)
     from like_move.splash import show_splash

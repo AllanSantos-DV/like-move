@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>like-move — sua tela não dorme, sua sessão continua segura</title>
+<meta name="description" content="Mouse jiggler inteligente para Windows: mantém a tela acordada com suporte a KVM, só em redes Wi-Fi confiáveis, e com auto-update. Standalone, sem admin." />
+<link rel="icon" href="assets/icon-128.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --slate: #0e1512;
+    --slate-2: #0b110e;
+    --panel: #16241e;
+    --panel-2: #1b2c24;
+    --line: #26382f;
+    --emerald: #2ecc71;
+    --emerald-dim: #27ae60;
+    --deep: #0f502d;
+    --ash: #95a5a6;
+    --mist: #e8f1ec;
+    --muted: #8da399;
+    --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+    --r: 16px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--slate);
+    color: var(--mist);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Subtle 1px grid — nods to the pixel cursor and the +1px jiggle */
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(46, 204, 113, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(46, 204, 113, 0.04) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 80%);
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  a { color: inherit; }
+
+  .mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--emerald);
+  }
+
+  /* ── Nav ───────────────────────────────────────────── */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(12px);
+    background: rgba(14, 21, 18, 0.72);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner { display: flex; align-items: center; gap: 20px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 1.1rem; }
+  .brand img { width: 26px; height: 26px; border-radius: 7px; }
+  .nav-links { display: flex; gap: 26px; margin-left: auto; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.92rem; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--mist); }
+  .nav-ver { font-family: "JetBrains Mono", monospace; font-size: 0.75rem; color: var(--emerald); border: 1px solid var(--line); padding: 4px 9px; border-radius: 999px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; text-decoration: none; border-radius: 10px;
+    padding: 11px 18px; font-size: 0.92rem; cursor: pointer; border: 1px solid transparent;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s;
+  }
+  .btn-primary { background: var(--emerald); color: #06231a; box-shadow: 0 10px 30px -10px rgba(46, 204, 113, 0.6); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 38px -12px rgba(46, 204, 113, 0.75); }
+  .btn-ghost { background: transparent; color: var(--mist); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--emerald); color: var(--emerald); }
+  .nav .btn { padding: 8px 15px; }
+  @media (max-width: 780px) { .nav-links { display: none; } }
+
+  /* ── Hero ──────────────────────────────────────────── */
+  .hero { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 52px; align-items: center; padding: 72px 0 40px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--emerald); }
+  h1 {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.3rem, 5vw, 3.7rem);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
+  }
+  h1 .accent { color: var(--emerald); }
+  .lead { color: var(--muted); font-size: 1.12rem; max-width: 30em; margin: 0 0 30px; }
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 26px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-size: 0.76rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
+  .chip b { color: var(--mist); font-weight: 600; }
+
+  /* ── Device / screen mock (the signature) ──────────── */
+  .screen {
+    position: relative;
+    background: linear-gradient(160deg, #0c1512, #060b09);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    aspect-ratio: 4 / 3.2;
+  }
+  .screen-bar { display: flex; align-items: center; gap: 6px; padding: 11px 14px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.02); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #2a3a32; }
+  .screen-bar span { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 0.68rem; color: var(--muted); }
+  .screen-body { position: relative; height: calc(100% - 45px); padding: 18px; }
+
+  .status {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: "JetBrains Mono", monospace; font-size: 0.78rem; letter-spacing: 0.08em;
+    padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line);
+    background: rgba(46,204,113,0.08); color: var(--emerald); transition: all 0.4s;
+  }
+  .status .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 0 0 rgba(46,204,113,0.7); animation: pulse 2s infinite; }
+  .screen.asleep .status { color: var(--ash); background: rgba(149,165,166,0.08); }
+  .screen.asleep .status .pulse { background: var(--ash); animation: none; box-shadow: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46,204,113,0.55); } 70% { box-shadow: 0 0 0 12px rgba(46,204,113,0); } 100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); } }
+
+  .cursor { position: absolute; left: 46%; top: 42%; width: 30px; height: 30px; transition: transform 0.12s ease-out; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.5)); }
+  .cursor svg { width: 100%; height: 100%; }
+  .jig { animation: jig 2.6s infinite; }
+  @keyframes jig { 0%,74%,100% { transform: translateX(0); } 78% { transform: translateX(7px); } 82% { transform: translateX(0); } 86% { transform: translateX(7px); } 90% { transform: translateX(0); } }
+
+  .log {
+    position: absolute; left: 18px; right: 18px; bottom: 16px;
+    font-family: "JetBrains Mono", monospace; font-size: 0.7rem; color: var(--muted);
+    border-top: 1px dashed var(--line); padding-top: 10px; min-height: 46px;
+  }
+  .log b { color: var(--emerald); font-weight: 500; }
+  .screen.asleep .log b { color: var(--ash); }
+
+  .toggle-row { position: absolute; right: 16px; top: 16px; display: flex; align-items: center; gap: 9px; font-size: 0.74rem; color: var(--muted); }
+  .switch { position: relative; width: 42px; height: 22px; border-radius: 999px; background: #223029; border: 1px solid var(--line); cursor: pointer; transition: background 0.3s; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ash); transition: transform 0.3s, background 0.3s; }
+  .switch.on { background: rgba(46,204,113,0.25); }
+  .switch.on::after { transform: translateX(20px); background: var(--emerald); }
+
+  /* ── Section scaffolding ───────────────────────────── */
+  section { padding: 70px 0; position: relative; }
+  .sec-head { max-width: 40em; margin-bottom: 44px; }
+  h2 { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: clamp(1.7rem, 3.5vw, 2.4rem); letter-spacing: -0.02em; margin: 14px 0 12px; line-height: 1.1; }
+  .sec-head p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+
+  /* ── Features grid ─────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--slate));
+    border: 1px solid var(--line); border-radius: var(--r); padding: 22px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(46,204,113,0.4); }
+  .card .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: rgba(46,204,113,0.12); color: var(--emerald); margin-bottom: 14px; }
+  .card h3 { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.02rem; margin: 0 0 6px; font-weight: 600; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+
+  /* ── Security split ────────────────────────────────── */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  .sec-security { background: linear-gradient(180deg, rgba(15,80,45,0.14), transparent); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .checklist { list-style: none; padding: 0; margin: 24px 0 0; }
+  .checklist li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 0.96rem; }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist .ck { color: var(--emerald); flex: none; margin-top: 3px; }
+  .checklist b { color: var(--mist); }
+
+  /* ── Tray menu (faithful, CSS) ─────────────────────── */
+  .menu-stage { display: flex; justify-content: center; }
+  .menu {
+    width: 268px; background: #1c1c1c; border: 1px solid #333; border-radius: 10px;
+    box-shadow: var(--shadow); padding: 6px; font-size: 0.86rem; color: #f0f0f0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .mi { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: default; }
+  .mi:hover { background: #2d2d2d; }
+  .mi .ck { width: 16px; color: var(--emerald); font-size: 0.8rem; text-align: center; }
+  .mi .arw { margin-left: auto; color: #8a8a8a; }
+  .mi.dim { color: #9a9a9a; }
+  .msep { height: 1px; background: #363636; margin: 6px 8px; }
+  .menu-tip { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 16px; }
+
+  /* ── How it works (Win32) ──────────────────────────── */
+  .api { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .api-row { display: grid; grid-template-columns: 200px 1fr; gap: 0; border-bottom: 1px solid var(--line); }
+  .api-row:last-child { border-bottom: none; }
+  .api-row:hover { background: rgba(46,204,113,0.04); }
+  .api-k { padding: 15px 18px; font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--emerald); border-right: 1px solid var(--line); }
+  .api-v { padding: 15px 18px; color: var(--muted); font-size: 0.92rem; }
+  @media (max-width: 640px) { .api-row { grid-template-columns: 1fr; } .api-k { border-right: none; border-bottom: 1px solid var(--line); } }
+
+  /* ── Gallery (real renders) ────────────────────────── */
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: end; }
+  .shot { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; text-align: center; }
+  .shot img { max-width: 100%; height: auto; border-radius: 8px; }
+  .shot .cap { margin-top: 14px; font-size: 0.82rem; color: var(--muted); }
+  .shot .cap b { color: var(--mist); display: block; font-family: "Bricolage Grotesque", sans-serif; }
+  .trays { display: flex; gap: 22px; justify-content: center; }
+  .tray-item { text-align: center; }
+  .tray-item img { width: 72px; height: 72px; border-radius: 12px; }
+  .tray-item span { display: block; margin-top: 8px; font-size: 0.78rem; color: var(--muted); }
+  @media (max-width: 780px) { .gallery { grid-template-columns: 1fr; } }
+
+  /* ── CTA band + footer ─────────────────────────────── */
+  .band { text-align: center; background: linear-gradient(180deg, rgba(46,204,113,0.09), transparent); border: 1px solid var(--line); border-radius: 24px; padding: 56px 24px; margin: 20px 0; }
+  .band h2 { margin-bottom: 10px; }
+  .band p { color: var(--muted); margin: 0 auto 26px; max-width: 32em; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0 56px; color: var(--muted); font-size: 0.88rem; }
+  .foot-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .foot-inner a { color: var(--muted); text-decoration: none; }
+  .foot-inner a:hover { color: var(--emerald); }
+  .foot-inner .sp { margin-left: auto; }
+
+  .split, .hero { }
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; gap: 36px; }
+    .split { grid-template-columns: 1fr; gap: 32px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .jig, .status .pulse { animation: none !important; }
+    .btn:hover, .card:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><img src="assets/icon-128.png" alt="like-move" /> like-move</a>
+    <div class="nav-links">
+      <a href="#recursos">Recursos</a>
+      <a href="#seguranca">Segurança</a>
+      <a href="#como">Como funciona</a>
+      <a href="#telas">Telas</a>
+    </div>
+    <span class="nav-ver" data-ver data-prefix="v">v1.1.0</span>
+    <a class="btn btn-primary" href="https://github.com/AllanSantos-DV/like-move/releases/latest">Baixar</a>
+  </div>
+</nav>
+
+<div class="wrap" id="top">
+
+  <!-- HERO -->
+  <header class="hero">
+    <div>
+      <div class="eyebrow"><span class="mono">Mouse jiggler · Windows</span></div>
+      <h1>Sua tela não dorme.<br /><span class="accent">Sua sessão continua segura.</span></h1>
+      <p class="lead">O like-move mantém o Windows acordado com um movimento imperceptível do mouse — e só quando você quer: em casa, no trabalho ou atrás de um KVM. Em Wi-Fi público, deixa a tela bloquear.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/AllanSantos-DV/like-move/releases/latest">⬇&nbsp; Baixar like-move.exe</a>
+        <a class="btn btn-ghost" href="https://github.com/AllanSantos-DV/like-move">Ver no GitHub</a>
+      </div>
+      <div class="chips">
+        <span class="chip"><b>Sem admin</b></span>
+        <span class="chip"><b>Executável único</b></span>
+        <span class="chip">Windows <b>7–11</b></span>
+        <span class="chip">~<b>15 MB</b></span>
+        <span class="chip"><b>Sem instalação</b></span>
+      </div>
+    </div>
+
+    <!-- Signature: live keep-awake screen -->
+    <div class="screen" id="screen">
+      <div class="screen-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span>monitor · 1920×1080</span>
+      </div>
+      <div class="screen-body">
+        <div class="status" id="status"><span class="pulse"></span><span id="statusText">ACORDADO</span></div>
+        <div class="toggle-row">
+          <span id="netLabel">Rede: Casa</span>
+          <div class="switch on" id="netSwitch" role="switch" aria-checked="true" tabindex="0" aria-label="Alternar rede confiável / Wi-Fi público"></div>
+        </div>
+        <div class="cursor jig" id="cursor" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="#fff"><path d="M3 2l0 18 4.2-4.2 2.7 5.9 2.7-1.2-2.7-5.8 6 0z"/></svg>
+        </div>
+        <div class="log" id="log"><b>&gt;</b> monitorando inatividade…</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- FEATURES -->
+  <section id="recursos">
+    <div class="sec-head">
+      <span class="mono">Recursos</span>
+      <h2>Tudo que ele faz — de verdade</h2>
+      <p>Só APIs Win32 via <code>ctypes</code>. Sem serviços, sem dependências nativas, sem admin.</p>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="ic">◧</div><h3>4 modos de trigger</h3><p>Inatividade, KVM, Ambos ou Sempre — você escolhe quando o jiggle acontece.</p></div>
+      <div class="card"><div class="ic">⚡</div><h3>KVM sem polling</h3><p>Reage ao evento <code>WM_DEVICECHANGE</code> do Windows. Zero CPU ociosa esperando.</p></div>
+      <div class="card"><div class="ic">🔒</div><h3>Redes Wi-Fi confiáveis</h3><p>Acorda só nas suas redes (SSID + BSSID). Em Wi-Fi público, a tela bloqueia.</p></div>
+      <div class="card"><div class="ic">🔄</div><h3>Atualiza sozinho</h3><p>Verifica novas versões no GitHub e troca o próprio <code>.exe</code>.</p></div>
+      <div class="card"><div class="ic">▣</div><h3>Detecta tela bloqueada</h3><p>Não faz jiggle à toa quando o Windows já está no Secure Desktop.</p></div>
+      <div class="card"><div class="ic">⊞</div><h3>Iniciar com Windows</h3><p>Opção sem admin, via registro do usuário (<code>HKCU</code>).</p></div>
+      <div class="card"><div class="ic">▤</div><h3>Configuração que fica</h3><p>Suas preferências ficam salvas entre reinícios, em <code>%APPDATA%</code>.</p></div>
+      <div class="card"><div class="ic">◔</div><h3>Movimento invisível</h3><p>Um passo de <code>+1px</code> e volta. Imperceptível — reseta o timer do Windows.</p></div>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section class="sec-security" id="seguranca">
+    <div class="split">
+      <div>
+        <span class="mono">Segurança</span>
+        <h2>Acordado só onde você confia</h2>
+        <p>Deixar a tela bloquear é uma defesa. Num café ou aeroporto, manter a máquina acordada é convite para acesso indevido. O like-move reconhece a rede pelo nome <b>e</b> pelo endereço do ponto de acesso — então uma rede falsa com o mesmo nome não engana o app.</p>
+        <ul class="checklist">
+          <li><span class="ck">✓</span><span><b>SSID + BSSID.</b> Casa o nome da rede com o MAC do access point — resiste a ataques <i>evil-twin</i>.</span></li>
+          <li><span class="ck">✓</span><span><b>Um clique.</b> "Marcar rede atual como confiável" lê o Wi-Fi conectado e adiciona à lista.</span></li>
+          <li><span class="ck">✓</span><span><b>Cabo configurável.</b> Sem Wi-Fi (Ethernet), você decide se conta como confiável.</span></li>
+          <li><span class="ck">✓</span><span><b>Qualquer outra rede</b> deixa a tela bloquear normalmente. Segurança por padrão.</span></li>
+        </ul>
+      </div>
+      <div class="menu-stage">
+        <div>
+          <div class="menu" role="menu" aria-label="Menu do like-move na bandeja">
+            <div class="mi"><span class="ck">✓</span><span>Ativo</span></div>
+            <div class="msep"></div>
+            <div class="mi"><span class="ck"></span><span>Modo</span><span class="arw">›</span></div>
+            <div class="mi dim"><span class="ck"></span><span>Dispositivos KVM</span><span class="arw">›</span></div>
+            <div class="mi"><span class="ck"></span><span>Threshold</span><span class="arw">›</span></div>
+            <div class="mi"><span class="ck"></span><span>Redes confiáveis</span><span class="arw">›</span></div>
+            <div class="msep"></div>
+            <div class="mi"><span class="ck"></span><span>Iniciar com Windows</span></div>
+            <div class="mi"><span class="ck"></span><span>Verificar atualizações</span></div>
+            <div class="mi"><span class="ck"></span><span>Sobre</span></div>
+            <div class="mi"><span class="ck"></span><span>Sair</span></div>
+          </div>
+          <p class="menu-tip">O menu real da bandeja — clique direito no ícone.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="como">
+    <div class="sec-head">
+      <span class="mono">Como funciona</span>
+      <h2>Win32 puro, do jeito certo</h2>
+      <p>Cada capacidade mapeada para a API nativa que a implementa — sem <code>pywin32</code>, sem <code>netsh</code>.</p>
+    </div>
+    <div class="api">
+      <div class="api-row"><div class="api-k">GetLastInputInfo</div><div class="api-v">Tempo desde o último input real (mouse/teclado) para medir inatividade.</div></div>
+      <div class="api-row"><div class="api-k">OpenInputDesktop</div><div class="api-v">Detecta tela bloqueada (Secure Desktop) — evita jiggle inútil.</div></div>
+      <div class="api-row"><div class="api-k">SendInput</div><div class="api-v">Move o cursor <code>+1px</code> e volta: imperceptível, reseta o timer de inatividade.</div></div>
+      <div class="api-row"><div class="api-k">WM_DEVICECHANGE</div><div class="api-v">Detecção de KVM orientada a evento — janela oculta recebe as trocas de dispositivo.</div></div>
+      <div class="api-row"><div class="api-k">WlanQueryInterface</div><div class="api-v">Lê SSID + BSSID da rede atual para o gate de redes confiáveis.</div></div>
+      <div class="api-row"><div class="api-k">GitHub Releases API</div><div class="api-v">Verifica a versão mais nova e baixa o novo <code>.exe</code> para o auto-update.</div></div>
+    </div>
+  </section>
+
+  <!-- GALLERY (real renders) -->
+  <section id="telas">
+    <div class="sec-head">
+      <span class="mono">Telas</span>
+      <h2>Geradas pelo próprio app</h2>
+      <p>Nada de mockup: estas imagens são renderizadas pelo like-move em código (Pillow + Win32).</p>
+    </div>
+    <div class="gallery">
+      <div class="shot">
+        <div class="trays">
+          <div class="tray-item"><img src="assets/tray-active.png" alt="Ícone verde — ativo" /><span>🟢 Ativo</span></div>
+          <div class="tray-item"><img src="assets/tray-paused.png" alt="Ícone cinza — pausado" /><span>⚫ Pausado</span></div>
+        </div>
+        <div class="cap"><b>Ícone da bandeja</b>verde quando ativo, cinza quando pausado</div>
+      </div>
+      <div class="shot">
+        <img src="assets/splash.png" alt="Splash screen do like-move" />
+        <div class="cap"><b>Splash</b>abertura com fade (~2,5 s)</div>
+      </div>
+      <div class="shot">
+        <img src="assets/about.png" alt="Janela Sobre do like-move" />
+        <div class="cap"><b>Sobre</b>janela nativa com ajuda e link do repositório</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BAND -->
+  <section>
+    <div class="band">
+      <span class="mono">Grátis · Open source</span>
+      <h2>Baixe e rode. Sem instalação.</h2>
+      <p>Um único <code>.exe</code>, sem Python, sem admin. O ícone aparece na bandeja e pronto.</p>
+      <div class="cta-row" style="justify-content:center">
+        <a class="btn btn-primary" href="https://github.com/AllanSantos-DV/like-move/releases/latest">⬇&nbsp; Baixar like-move.exe</a>
+        <a class="btn btn-ghost" href="https://github.com/AllanSantos-DV/like-move">Código no GitHub</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span>MIT © Allan Santos</span>
+    <a href="https://github.com/AllanSantos-DV/like-move">github.com/AllanSantos-DV/like-move</a>
+    <span class="sp mono" data-ver data-prefix="like-move v">like-move v1.1.0</span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var screen = document.getElementById('screen');
+    var statusText = document.getElementById('statusText');
+    var cursor = document.getElementById('cursor');
+    var log = document.getElementById('log');
+    var sw = document.getElementById('netSwitch');
+    var netLabel = document.getElementById('netLabel');
+    var trusted = true;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function stamp() { var d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+
+    function setState() {
+      if (trusted) {
+        screen.classList.remove('asleep');
+        statusText.textContent = 'ACORDADO';
+        netLabel.textContent = 'Rede: Casa';
+        sw.classList.add('on'); sw.setAttribute('aria-checked', 'true');
+        if (!reduce) cursor.classList.add('jig');
+        log.innerHTML = '<b>&gt;</b> rede confiável — mantendo acordado';
+      } else {
+        screen.classList.add('asleep');
+        statusText.textContent = 'TELA BLOQUEIA';
+        netLabel.textContent = 'Wi-Fi público';
+        sw.classList.remove('on'); sw.setAttribute('aria-checked', 'false');
+        cursor.classList.remove('jig');
+        log.innerHTML = '<b>&gt;</b> rede não confiável — liberando bloqueio';
+      }
+    }
+
+    function toggle() { trusted = !trusted; setState(); }
+    sw.addEventListener('click', toggle);
+    sw.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+
+    // Activity log — appends a jiggle line while trusted
+    setInterval(function () {
+      if (trusted) {
+        log.innerHTML = '<b>&gt;</b> ' + stamp() + ' &nbsp;jiggle <b>+1px</b> → sessão mantida';
+      }
+    }, 2600);
+
+    setState();
+
+    // Versão dinâmica: lê o arquivo VERSION (empacotado ao lado do site pelo
+    // workflow de Pages). Quando o VERSION muda, a página reflete no próximo
+    // deploy — sem editar o HTML. Em preview local, mantém o texto de fallback.
+    (function loadVersion() {
+      var els = document.querySelectorAll('[data-ver]');
+      if (!els.length) return;
+      fetch('VERSION', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (t) {
+          if (!t) return;
+          var v = t.trim();
+          if (!v) return;
+          els.forEach(function (e) { e.textContent = (e.dataset.prefix || '') + v; });
+        })
+        .catch(function () { /* offline/local — mantém o fallback */ });
+    })();
+  })();
+</script>
+</body>
+</html>
