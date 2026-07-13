@@ -45,7 +45,7 @@
 
 Baixe a versão mais recente na [página de releases](../../releases/latest):
 
-> **[⬇ like-move.exe](../../releases/latest)** — executável standalone, não requer Python nem instalação.
+> **[⬇ Baixar like-move.exe](../../releases/latest/download/like-move.exe)** — download direto do executável standalone, não requer Python nem instalação.
 
 Basta baixar e executar. O ícone aparece na bandeja do sistema (system tray).
 
