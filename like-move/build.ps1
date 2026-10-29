@@ -1,14 +1,18 @@
 <#
 .SYNOPSIS
-    Build like-move.exe using PyInstaller.
+    Build like-move (pasta onedir) e o zip de distribuição.
 
 .DESCRIPTION
-    Installs PyInstaller (if missing), runs the spec file, and reports
-    the size of the resulting executable.
+    Roda o spec do PyInstaller e empacota dist\like-move\ em dist\like-move-win64.zip.
+    Com -CompileBootloader, reinstala o PyInstaller compilando o bootloader localmente
+    (exige o compilador C do Visual Studio Build Tools): o bootloader pré-compilado é
+    compartilhado por todo usuário de PyInstaller e aparece em listas de antivírus.
 
 .EXAMPLE
     .\build.ps1
+    .\build.ps1 -CompileBootloader
 #>
+param([switch]$CompileBootloader)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -16,35 +20,31 @@ $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 
 try {
-    # 1. Ensure PyInstaller is installed
-    python -m PyInstaller --version 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host '[build] Installing PyInstaller...' -ForegroundColor Cyan
-        pip install --user pyinstaller
-        if ($LASTEXITCODE -ne 0) { throw 'Failed to install PyInstaller' }
+    if ($CompileBootloader) {
+        Write-Host '[build] Compilando o bootloader do PyInstaller...' -ForegroundColor Cyan
+        $env:PYINSTALLER_COMPILE_BOOTLOADER = '1'
+        python -m pip install --force-reinstall --no-binary pyinstaller pyinstaller
+        if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar o bootloader do PyInstaller' }
     } else {
-        Write-Host '[build] PyInstaller already installed.' -ForegroundColor Green
+        python -m PyInstaller --version 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'PyInstaller não instalado: pip install pyinstaller' }
     }
 
-    # 2. Clean previous build artifacts
     if (Test-Path 'dist') { Remove-Item -Recurse -Force 'dist' }
     if (Test-Path 'build') { Remove-Item -Recurse -Force 'build' }
 
-    # 3. Run PyInstaller
-    Write-Host '[build] Running PyInstaller...' -ForegroundColor Cyan
+    Write-Host '[build] Rodando o PyInstaller...' -ForegroundColor Cyan
     python -m PyInstaller like-move.spec --noconfirm
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed' }
 
-    # 4. Report result
-    $exe = 'dist\like-move.exe'
-    if (Test-Path $exe) {
-        $size = (Get-Item $exe).Length
-        $sizeMB = [math]::Round($size / 1MB, 2)
-        Write-Host ""
-        Write-Host "[build] SUCCESS: $exe ($sizeMB MB)" -ForegroundColor Green
-    } else {
-        throw "Expected output not found: $exe"
-    }
+    $exe = 'dist\like-move\like-move.exe'
+    if (-not (Test-Path $exe)) { throw "Expected output not found: $exe" }
+
+    $zip = 'dist\like-move-win64.zip'
+    Compress-Archive -Path 'dist\like-move' -DestinationPath $zip
+    $sizeMB = [math]::Round((Get-Item $zip).Length / 1MB, 2)
+    Write-Host ""
+    Write-Host "[build] SUCCESS: $zip ($sizeMB MB)" -ForegroundColor Green
 } finally {
     Pop-Location
 }

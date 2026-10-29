@@ -210,10 +210,10 @@ def _show_about_impl(icon) -> None:
 
     # Body text (left-aligned)
     body = (
-        "Mouse jiggler inteligente para Windows\n\n"
+        "Mantém o Windows sem bloquear, só quando você quer\n\n"
         "Como usar:\n"
         "• Clique direito no ícone para acessar o menu\n"
-        "• Ativo: Liga/desliga o jiggler\n"
+        "• Ativo: Liga/desliga o like-move\n"
         "• Modo: Escolha entre Inatividade, KVM, Ambos ou Sempre\n"
         "• Threshold: Tempo de espera antes de começar (15s a 5min)\n"
         "• Dispositivos KVM: Escolha quais dispositivos monitorar\n\n"

@@ -25,7 +25,6 @@ CONFIG_FILENAME = "config.json"
 DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "idle_threshold": 30,
-    "jiggle_interval": 10,
     "trigger_mode": "idle",
     "monitor_devices": ["monitor"],
     # Gate de rede Wi-Fi confiável

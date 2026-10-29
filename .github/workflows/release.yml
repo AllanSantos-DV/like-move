@@ -23,18 +23,38 @@ jobs:
           cache: pip
           cache-dependency-path: like-move/requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r like-move/requirements.txt pyinstaller
+      # Bootloader compilado no runner (MSVC): o pré-compilado é o mesmo para todo usuário
+      # de PyInstaller e aparece em listas de antivírus.
+      - name: Install dependencies (PyInstaller with locally compiled bootloader)
+        env:
+          PYINSTALLER_COMPILE_BOOTLOADER: "1"
+        run: |
+          pip install -r like-move/requirements.txt
+          pip install --no-binary pyinstaller pyinstaller
 
-      - name: Build executable
+      - name: Unit tests
+        working-directory: like-move
+        run: python -m unittest discover -s tests -v
+
+      - name: Build (onedir, no UPX)
         working-directory: like-move
         run: python -m PyInstaller like-move.spec --noconfirm
 
-      - name: Create GitHub Release
+      - name: Package
+        working-directory: like-move
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/like-move -DestinationPath dist/like-move-win64.zip
+          Compress-Archive -Path home-awake/* -DestinationPath dist/home-awake.zip
+
+      # Sai como rascunho: só é publicada depois de baixada e verificada pelo antivírus.
+      - name: Create draft GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "like-move ${{ github.ref_name }}"
           generate_release_notes: true
-          draft: false
+          draft: true
           prerelease: false
-          files: like-move/dist/like-move.exe
+          files: |
+            like-move/dist/like-move-win64.zip
+            like-move/dist/home-awake.zip

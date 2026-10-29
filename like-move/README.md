@@ -1,6 +1,8 @@
 # like-move 🖱️
 
-**Mouse jiggler inteligente para Windows** — previne bloqueio de tela por inatividade, com suporte especial a KVM switches.
+**Mantém o Windows sem bloquear, só quando você quer** — previne o bloqueio de tela por inatividade, com suporte especial a KVM switches e a redes Wi-Fi confiáveis. Não simula mouse nem teclado.
+
+🌐 **Página do produto, com vídeo:** https://allansantos-dv.github.io/like-move/
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Release](https://img.shields.io/github/v/release/AllanSantos-DV/like-move?display_name=tag&label=release)
@@ -30,13 +32,14 @@
 
 - **4 modos de trigger**: Inatividade, KVM (event-driven), Ambos ou Sempre
 - **🔒 Redes Wi-Fi confiáveis** — mantém a tela acordada só em redes que você confia (casa/trabalho); em Wi-Fi público deixa bloquear. Casa por SSID **+ BSSID** (anti *evil-twin*)
-- **🔄 Auto-update** — verifica novas releases no GitHub e atualiza o `.exe` sozinho
+- **Sem simular entrada** — pede ao Windows "tela e sistema ligados" (`SetThreadExecutionState`); nada de mouse ou teclado falso
+- **🔄 Auto-update** — verifica novas releases no GitHub e instala a nova versão ao lado da atual
 - **Detecção de KVM via eventos do Windows** — usa `WM_DEVICECHANGE` (event-driven, sem polling)
-- **Detecção de tela bloqueada** — não faz jiggle desnecessário quando a tela já está no Secure Desktop
+- **Detecção de tela bloqueada** — libera o pedido quando a tela já está no Secure Desktop
 - **System tray** — ícone colorido (🟢 ativo / ⚫ pausado) com menu completo
 - **Iniciar com Windows** — opção sem admin (registro `HKCU`)
 - **Configuração persistente** — preferências salvas em `%APPDATA%\like-move\config.json`
-- **Standalone** — executável `.exe` único via PyInstaller, sem dependências externas
+- **Standalone** — pasta pronta (`like-move.exe` + `_internal`), sem Python e sem instalar nada
 - **Sem admin** — todas as APIs são user-space (Win32 via ctypes)
 
 ---
@@ -45,9 +48,9 @@
 
 Baixe a versão mais recente na [página de releases](../../releases/latest):
 
-> **[⬇ Baixar like-move.exe](../../releases/latest/download/like-move.exe)** — download direto do executável standalone, não requer Python nem instalação.
+> **[⬇ Baixar like-move-win64.zip](../../releases/latest/download/like-move-win64.zip)** — pasta pronta, não requer Python nem instalação.
 
-Basta baixar e executar. O ícone aparece na bandeja do sistema (system tray).
+Extraia o zip e abra `like-move\like-move.exe`. O ícone aparece na bandeja do sistema (system tray).
 
 ---
 
@@ -55,8 +58,8 @@ Basta baixar e executar. O ícone aparece na bandeja do sistema (system tray).
 
 ### Executável standalone (recomendado)
 
-1. Baixe `like-move.exe` na [página de releases](../../releases/latest)
-2. Execute — o ícone aparece na bandeja do sistema
+1. Baixe `like-move-win64.zip` na [página de releases](../../releases/latest)
+2. Extraia numa pasta sua (ex.: `Documentos\like-move`) e abra `like-move.exe` — o ícone aparece na bandeja
 3. Pronto! Não requer Python, admin ou instalação
 
 ### Desenvolvimento (Python)
@@ -86,17 +89,17 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 
 | Ícone | Estado |
 |-------|--------|
-| 🟢 Verde | Ativo — monitorando e fazendo jiggle quando necessário |
-| ⚫ Cinza | Pausado — nenhum jiggle sendo feito |
+| 🟢 Verde | Ativo — mantém o Windows acordado quando o modo pede |
+| ⚫ Cinza | Pausado — o Windows bloqueia normalmente |
 
 ### Menu do tray
 
 | Opção | Descrição |
 |-------|-----------|
-| **Ativo** | Liga/desliga o jiggler (checkbox) |
+| **Ativo** | Liga/desliga o like-move (checkbox) |
 | **Modo →** | Seleciona modo de trigger (Inatividade, KVM, Ambos, Sempre) |
 | **Dispositivos KVM →** | Seleciona quais dispositivos monitorar (visível nos modos KVM/Ambos) |
-| **Threshold →** | Tempo de inatividade antes do jiggle (15s, 30s, 1min, 2min, 5min) |
+| **Threshold →** | Tempo de inatividade antes de manter acordado (15s, 30s, 1min, 2min, 5min) |
 | **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis e liga "Só em redes confiáveis" |
 | **Iniciar com Windows** | Inicia o like-move junto com o Windows (sem admin) |
 | **Verificar atualizações** | Procura uma versão mais nova nas releases do GitHub |
@@ -109,10 +112,10 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 
 | Modo | Comportamento |
 |------|--------------|
-| **Inatividade** | Jiggle quando o tempo sem input (mouse/teclado) ultrapassa o threshold. Modo clássico de mouse jiggler. |
-| **KVM** | Jiggle quando um dispositivo monitorado desconecta (ex: KVM trocou para outro PC). Usa `WM_DEVICECHANGE` — event-driven, sem polling. |
-| **Ambos** | Ativa o jiggle se **qualquer** condição for atendida (inatividade OU desconexão KVM). |
-| **Sempre** | Jiggle contínuo enquanto o programa estiver ativo. Controle manual via toggle no tray. |
+| **Inatividade** | Mantém acordado quando o tempo sem input (mouse/teclado) ultrapassa o threshold. |
+| **KVM** | Mantém acordado enquanto um dispositivo monitorado está desconectado (ex: KVM trocou para outro PC). Usa `WM_DEVICECHANGE` — event-driven, sem polling. |
+| **Ambos** | Mantém acordado se **qualquer** condição for atendida (inatividade OU desconexão KVM). |
+| **Sempre** | Mantém acordado enquanto o programa estiver ativo. Controle manual via toggle no tray. |
 
 ---
 
@@ -126,16 +129,16 @@ Nos modos **KVM** e **Ambos**, você pode selecionar quais dispositivos monitora
 | **Mouse** | Dispositivos de mouse raw input | `GetRawInputDeviceList` (RIM_TYPEMOUSE) |
 | **Teclado** | Dispositivos de teclado raw input | `GetRawInputDeviceList` (RIM_TYPEKEYBOARD) |
 
-O like-move captura uma **baseline** na inicialização. Se a contagem de algum dispositivo monitorado cair abaixo da baseline, considera-se uma desconexão (= KVM trocou para outro PC) e o jiggle é ativado.
+O like-move captura uma **baseline** na inicialização. Se a contagem de algum dispositivo monitorado cair abaixo da baseline, considera-se uma desconexão (= KVM trocou para outro PC) e o like-move mantém o Windows acordado.
 
 ---
 
 ## 🔒 Redes Wi-Fi confiáveis (segurança)
 
-Deixar a tela bloquear é uma medida de segurança. Manter a máquina acordada em uma **rede pública** (café, aeroporto) pode expor a sessão a acesso não autorizado. Por isso o like-move pode restringir o jiggle a **redes confiáveis**:
+Deixar a tela bloquear é uma medida de segurança. Manter a máquina acordada em uma **rede pública** (café, aeroporto) pode expor a sessão a acesso não autorizado. Por isso o like-move pode agir só em **redes confiáveis**:
 
 - Em **Redes confiáveis → Marcar rede atual como confiável**, o like-move lê a rede Wi-Fi conectada (SSID + BSSID) e a adiciona à lista.
-- Ative **Só em redes confiáveis** para que o jiggle só ocorra nessas redes. Em qualquer outra rede (ou Wi-Fi público), a tela bloqueia normalmente.
+- Ative **Só em redes confiáveis** para que o like-move só aja nessas redes. Em qualquer outra rede (ou Wi-Fi público), a tela bloqueia normalmente.
 - O casamento usa **SSID + BSSID** (o MAC do ponto de acesso), resistindo a ataques *evil-twin* — uma rede falsa com o mesmo nome da sua não é aceita.
 - Em conexão **cabeada** (sem Wi-Fi), o comportamento é configurável (`wired_is_trusted`, padrão: confiável).
 
@@ -144,7 +147,7 @@ Deixar a tela bloquear é uma medida de segurança. Manter a máquina acordada e
 | **Marcar rede atual como confiável** | Adiciona o Wi-Fi atual (SSID + BSSID) à lista |
 | **Remover rede atual da lista** | Remove o Wi-Fi atual (visível se estiver na lista) |
 | **Esquecer todas as redes** | Limpa a lista de confiáveis |
-| **Só em redes confiáveis** | Liga o gate: jiggle apenas em redes confiáveis |
+| **Só em redes confiáveis** | Liga o gate: age apenas em redes confiáveis |
 
 Detecção via **WLAN API** (`wlanapi.dll`) por `ctypes` — sem `netsh` nem dependências extras.
 
@@ -156,7 +159,7 @@ O like-move verifica se há uma versão mais nova nas [releases do GitHub](../..
 
 - **Verificar ao iniciar** (padrão: ligado) — checa em segundo plano ao abrir e avisa se houver novidade.
 - **Verificar atualizações** — checagem manual pelo menu.
-- Quando há atualização, surge **Atualizar para vX.Y.Z**: o like-move baixa o novo `.exe`, substitui o binário em execução (via helper que aguarda o app fechar) e reinicia.
+- Quando há atualização, surge **Atualizar para vX.Y.Z**: o like-move baixa `like-move-win64.zip`, extrai numa pasta ao lado (`like-move-X.Y.Z`) e abre a nova versão, que remove da pasta antiga só `like-move.exe` e `_internal` e reaponta "Iniciar com Windows". Nenhum script auxiliar troca arquivos em uso.
 - Usa apenas a API pública de releases do GitHub e a stdlib (`urllib`) — sem servidores nem dependências extras.
 
 ---
@@ -167,10 +170,8 @@ Os valores padrão estão em `like_move/config.py`:
 
 | Parâmetro | Padrão | Descrição |
 |-----------|--------|-----------|
-| `IDLE_THRESHOLD_SECONDS` | 30 | Segundos de inatividade antes de iniciar jiggle |
-| `JIGGLE_INTERVAL_SECONDS` | 10 | Intervalo entre jiggles enquanto idle |
+| `IDLE_THRESHOLD_SECONDS` | 30 | Segundos de inatividade antes de manter acordado |
 | `CHECK_INTERVAL_SECONDS` | 1 | Intervalo de checagem do estado |
-| `JIGGLE_PIXELS` | 1 | Pixels de movimento (ida e volta) |
 
 As preferências alteradas pelo menu (modo, threshold, dispositivos, redes confiáveis, auto-update) são **persistidas** em `%APPDATA%\like-move\config.json` e recarregadas na próxima execução.
 
@@ -184,11 +185,11 @@ O like-move usa exclusivamente APIs Win32 via `ctypes` — sem `pywin32`, sem de
 |-----------|-----------|-----------|
 | Detecção de idle | `GetLastInputInfo` + `GetTickCount64` | Calcula tempo desde último input real |
 | Detecção de tela bloqueada | `OpenInputDesktopW` | Retorna `NULL` quando a tela está no Secure Desktop |
-| Mouse jiggle | `SendInput` (`MOUSEEVENTF_MOVE`) | Movimento relativo +1px/−1px — imperceptível, reseta timer do Windows |
+| Manter acordado | `SetThreadExecutionState` | `ES_CONTINUOUS \| ES_SYSTEM_REQUIRED \| ES_DISPLAY_REQUIRED`; o Windows descarta o pedido quando o app fecha |
 | Detecção de KVM | `WM_DEVICECHANGE` + hidden window | Event-driven: janela oculta recebe broadcasts de mudança de dispositivo |
 | Contagem de dispositivos | `GetSystemMetrics`, `GetRawInputDeviceList` | Monitores, mouses e teclados conectados |
 | Rede Wi-Fi atual | `WlanOpenHandle` / `WlanQueryInterface` | SSID + BSSID da rede conectada (gate de rede confiável) |
-| Auto-update | GitHub Releases API + `urllib` | Verifica e baixa nova versão; troca o `.exe` via helper `.bat` |
+| Auto-update | GitHub Releases API + `urllib` + `zipfile` | Verifica, baixa e abre a nova versão numa pasta ao lado |
 
 ### Arquitetura
 
@@ -200,8 +201,8 @@ like_move/
 ├── detector.py           → Detecção de idle e tela bloqueada (ctypes)
 ├── device_monitor.py     → Monitor de dispositivos event-driven (WM_DEVICECHANGE)
 ├── wifi.py               → Rede Wi-Fi atual (SSID+BSSID) via WLAN API + gate de confiança
-├── jiggler.py            → Lógica de jiggle via SendInput + thread de monitoramento
-├── updater.py            → Auto-update via GitHub Releases (self-replace do .exe)
+├── awake.py              → Decide quando manter acordado (SetThreadExecutionState) + thread de monitoramento
+├── updater.py            → Auto-update via GitHub Releases (nova versão numa pasta ao lado)
 ├── tray.py               → System tray icon com pystray + menu configurável
 ├── splash.py             → Splash screen com fade (Win32 layered window)
 ├── about.py              → Janela "Sobre" (Win32 layered window)
@@ -210,7 +211,7 @@ like_move/
 
 **Threads:**
 - **Principal** — event loop do pystray (system tray)
-- **Monitor** — thread daemon que checa idle/KVM e faz jiggle
+- **Monitor** — thread daemon que checa idle/KVM e liga/libera o pedido ao Windows
 - **DeviceMonitor** — thread daemon com message pump Win32 para `WM_DEVICECHANGE`
 
 ---
@@ -223,24 +224,24 @@ like_move/
 # Instalar dependências
 pip install -r requirements.txt pyinstaller
 
-# Build via script
+# Build via script (gera dist\like-move\ e dist\like-move-win64.zip)
 .\build.ps1
 
-# Ou build manual
-python -m PyInstaller like-move.spec --noconfirm
+# Com o bootloader do PyInstaller compilado localmente (exige Visual Studio Build Tools)
+.\build.ps1 -CompileBootloader
 ```
 
-O executável é gerado em `dist/like-move.exe` (~15 MB, standalone).
+O build sai em pasta (`onedir`), sem UPX e com metadados de versão no `.exe`: o modo arquivo único extrai tudo para `%TEMP%` e o UPX comprime os binários, duas heurísticas clássicas de antivírus.
+
+### Testes
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ### CI/CD
 
-O repositório inclui GitHub Actions workflow que gera automaticamente uma release com o `.exe` ao criar uma tag `v*`:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-# → GitHub Actions builda e publica like-move.exe na release
-```
+O workflow de release roda ao criar uma tag `v*` na `master`: compila o bootloader do PyInstaller no runner, roda os testes, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
 
 ### Regenerar ícone
 

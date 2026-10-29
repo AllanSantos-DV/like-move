@@ -1,26 +1,30 @@
 """Auto-update via GitHub Releases (sem dependências externas).
 
-Fluxo (custom, alinhado à filosofia minimalista do projeto):
-
+Fluxo:
     GET https://api.github.com/repos/<owner>/<repo>/releases/latest
-    → compara ``tag_name`` (ex.: "v1.0.4") com a versão local (VERSION)
-    → se houver versão maior, baixa o asset ``.exe`` e substitui o binário
-      em execução via um script auxiliar (.bat) que espera o processo sair.
+    → compara ``tag_name`` (ex.: "v1.2.0") com a versão local (VERSION)
+    → se houver versão maior, baixa o asset ``like-move-win64.zip``, extrai numa
+      pasta irmã ``like-move-<versão>`` e abre o novo ``like-move.exe``.
 
-Só faz a troca do binário quando rodando "congelado" (``sys.frozen`` do
-PyInstaller). Em modo desenvolvimento (Python), apenas informa e abre a
-página de releases no navegador.
+O app atual só encerra; nenhum script auxiliar troca arquivos em uso. A nova
+versão, ao abrir, remove da pasta antiga apenas ``like-move.exe`` e ``_internal``
+(e a pasta, se ficar vazia) e reaponta "Iniciar com Windows" para si.
 
-Usa somente a stdlib (``urllib``) — nada de ``requests``/``pyupdater``.
+Só aplica quando rodando "congelado" (``sys.frozen`` do PyInstaller). Em modo
+desenvolvimento (Python), apenas informa e abre a página de releases.
+Usa somente a stdlib (``urllib``/``zipfile``).
 """
 
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
+import zipfile
 from typing import NamedTuple, Optional
 
 from . import __version__
@@ -29,23 +33,22 @@ logger = logging.getLogger(__name__)
 
 # Repositório de releases (owner/repo)
 REPO: str = "AllanSantos-DV/like-move"
+ASSET_NAME: str = "like-move-win64.zip"
+EXE_NAME: str = "like-move.exe"
+REPLACED_ARG: str = "--replaced"
+
 _API_LATEST: str = f"https://api.github.com/repos/{REPO}/releases/latest"
 _RELEASES_PAGE: str = f"https://github.com/{REPO}/releases/latest"
 _USER_AGENT: str = "like-move-updater"
 _HTTP_TIMEOUT: float = 12.0
 
-# Flags de criação de processo (Windows) para desanexar o helper
-_DETACHED_PROCESS: int = 0x00000008
-_CREATE_NEW_PROCESS_GROUP: int = 0x00000200
-_CREATE_NO_WINDOW: int = 0x08000000
-
 
 class UpdateInfo(NamedTuple):
     """Metadados de uma atualização disponível."""
 
-    version: str            # ex.: "1.0.4"
-    tag: str                # ex.: "v1.0.4"
-    download_url: str       # URL do asset .exe
+    version: str            # ex.: "1.2.0"
+    tag: str                # ex.: "v1.2.0"
+    download_url: str       # URL do asset .zip
     size: int               # tamanho esperado em bytes (0 se desconhecido)
     notes: str              # release notes
     html_url: str           # página da release
@@ -98,11 +101,10 @@ def _fetch_latest() -> Optional[dict]:
         return None
 
 
-def _pick_exe_asset(assets: list) -> Optional[dict]:
-    """Escolhe o asset .exe da lista de assets da release."""
+def _pick_asset(assets: list) -> Optional[dict]:
+    """Escolhe o asset ``like-move-win64.zip`` da lista de assets da release."""
     for asset in assets or []:
-        name = str(asset.get("name", "")).lower()
-        if name.endswith(".exe") and asset.get("browser_download_url"):
+        if str(asset.get("name", "")).lower() == ASSET_NAME and asset.get("browser_download_url"):
             return asset
     return None
 
@@ -118,7 +120,7 @@ def check_for_update() -> Optional[UpdateInfo]:
         logger.info("Sem atualização (local=%s, remoto=%s)", __version__, tag or "?")
         return None
 
-    asset = _pick_exe_asset(data.get("assets") or [])
+    asset = _pick_asset(data.get("assets") or [])
     download_url = asset.get("browser_download_url", "") if asset else ""
     size = int(asset.get("size", 0)) if asset else 0
 
@@ -151,78 +153,87 @@ def _download(url: str, dest: str) -> bool:
         return False
 
 
-def _write_helper_bat(bat_path: str, old_exe: str, new_exe: str) -> None:
-    """Escreve o .bat que espera o app sair, troca o binário e reinicia.
 
-    Usa ``ping`` como delay (funciona sem console, ao contrário de
-    ``timeout``) e faz loop até conseguir apagar o exe (que fica travado
-    enquanto o app roda).
+
+def stage_update(zip_path: str, install_dir: str, version: str) -> str:
+    """Extrai o zip numa pasta irmã de ``install_dir`` e devolve o caminho do novo exe.
+
+    Levanta ``ValueError`` se o zip não trouxer ``like-move.exe``.
     """
-    script = (
-        "@echo off\r\n"
-        "setlocal\r\n"
-        f'set "OLD={old_exe}"\r\n'
-        f'set "NEW={new_exe}"\r\n'
-        ":wait\r\n"
-        "ping 127.0.0.1 -n 2 >nul\r\n"
-        'del "%OLD%" >nul 2>&1\r\n'
-        'if exist "%OLD%" goto wait\r\n'
-        'move /y "%NEW%" "%OLD%" >nul 2>&1\r\n'
-        'start "" "%OLD%"\r\n'
-        'del "%~f0" >nul 2>&1\r\n'
-    )
-    with open(bat_path, "w", encoding="ascii", newline="") as f:
-        f.write(script)
+    parent = os.path.dirname(os.path.abspath(install_dir))
+    target = os.path.join(parent, f"like-move-{version}")
+    suffix = 1
+    while os.path.exists(target):
+        suffix += 1
+        target = os.path.join(parent, f"like-move-{version}-{suffix}")
+
+    with tempfile.TemporaryDirectory(prefix="like-move-update-") as tmp:
+        with zipfile.ZipFile(zip_path) as z:
+            z.extractall(tmp)  # extractall descarta caminhos absolutos e ".."
+        # O zip da release traz uma pasta raiz (like-move/); aceita também o conteúdo solto.
+        entries = os.listdir(tmp)
+        root = os.path.join(tmp, entries[0]) if len(entries) == 1 and os.path.isdir(os.path.join(tmp, entries[0])) else tmp
+        if not os.path.isfile(os.path.join(root, EXE_NAME)):
+            raise ValueError(f"{ASSET_NAME} sem {EXE_NAME}")
+        shutil.copytree(root, target)
+    return os.path.join(target, EXE_NAME)
 
 
 def download_and_stage(update: UpdateInfo) -> Optional[str]:
-    """Baixa o novo .exe e prepara o helper. Retorna o caminho do .bat.
-
-    Não reinicia o app — o chamador deve encerrar o processo em seguida
-    para que o helper consiga substituir o binário travado.
-    """
+    """Baixa a nova versão e a deixa pronta ao lado da atual. Retorna o novo exe."""
     if not is_frozen():
-        logger.info("Modo dev: pulando troca de binário")
+        logger.info("Modo dev: pulando troca de versão")
         return None
     if not update.download_url:
-        logger.warning("Update sem asset .exe para baixar")
+        logger.warning("Release sem o asset %s", ASSET_NAME)
         return None
 
-    old_exe = os.path.abspath(sys.executable)
-    tmpdir = os.path.join(tempfile.gettempdir(), "like-move-update")
-    os.makedirs(tmpdir, exist_ok=True)
-    new_exe = os.path.join(tmpdir, "like-move-new.exe")
+    with tempfile.TemporaryDirectory(prefix="like-move-dl-") as tmp:
+        zip_path = os.path.join(tmp, ASSET_NAME)
+        if not _download(update.download_url, zip_path):
+            return None
+        actual = os.path.getsize(zip_path)
+        if actual <= 0 or (update.size and actual != update.size):
+            logger.warning("Download inválido (esperado=%d, obtido=%d)", update.size, actual)
+            return None
+        try:
+            return stage_update(zip_path, os.path.dirname(sys.executable), update.version)
+        except (OSError, ValueError, zipfile.BadZipFile):
+            logger.warning("Falha ao preparar a atualização", exc_info=True)
+            return None
 
-    if not _download(update.download_url, new_exe):
-        return None
 
-    # Verificação básica de integridade: tamanho esperado (quando conhecido)
+def launch_new(new_exe: str) -> bool:
+    """Abre a nova versão, avisando qual pasta ela substitui."""
     try:
-        actual = os.path.getsize(new_exe)
-    except OSError:
-        actual = 0
-    if actual <= 0 or (update.size and actual != update.size):
-        logger.warning(
-            "Download inválido (esperado=%d, obtido=%d)", update.size, actual
-        )
-        return None
-
-    bat_path = os.path.join(tmpdir, "apply_update.bat")
-    _write_helper_bat(bat_path, old_exe, new_exe)
-    return bat_path
-
-
-def launch_helper(bat_path: str) -> bool:
-    """Dispara o helper .bat desanexado do processo atual."""
-    try:
-        subprocess.Popen(
-            ["cmd", "/c", bat_path],
-            creationflags=(
-                _DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP | _CREATE_NO_WINDOW
-            ),
-            close_fds=True,
-        )
+        subprocess.Popen([new_exe, REPLACED_ARG, os.path.dirname(sys.executable)], close_fds=True)
         return True
-    except Exception:
-        logger.warning("Falha ao iniciar o helper de atualização", exc_info=True)
+    except OSError:
+        logger.warning("Falha ao abrir a nova versão", exc_info=True)
         return False
+
+
+def cleanup_previous(old_dir: str, timeout: float = 15.0) -> bool:
+    """Remove da pasta antiga só os arquivos do like-move, esperando a versão antiga fechar.
+
+    Nunca apaga outros arquivos: se a pasta tiver mais coisas, ela fica.
+    """
+    old_exe = os.path.join(old_dir, EXE_NAME)
+    deadline = time.monotonic() + timeout
+    while os.path.exists(old_exe):
+        try:
+            os.remove(old_exe)
+        except PermissionError:  # versão antiga ainda fechando
+            if time.monotonic() > deadline:
+                logger.warning("Versão antiga não fechou; pasta mantida: %s", old_dir)
+                return False
+            time.sleep(0.5)
+        except FileNotFoundError:
+            break
+    shutil.rmtree(os.path.join(old_dir, "_internal"), ignore_errors=True)
+    try:
+        os.rmdir(old_dir)
+    except OSError:
+        pass  # pasta tem outros arquivos do usuário: fica
+    logger.info("Versão anterior removida de %s", old_dir)
+    return True
