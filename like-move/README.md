@@ -276,19 +276,6 @@ Há também uma página de vitrine estática em [`site/index.html`](site/index.h
 
 ---
 
-## 🛌 Só impedir o sistema de dormir (`keep_awake.pyw`)
-
-Script mínimo e legível (~30 linhas, só stdlib): chama `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)`.
-Não simula mouse/teclado, não usa rede nem registro.
-
-```bash
-pythonw keep_awake.pyw     # sem janela; para parar, encerre o pythonw.exe
-```
-
-Verificação (PowerShell **como administrador**): `powershell -File tests/test_keep_awake.ps1`
-
----
-
 ## 🏠 Home Awake (`home-awake/`)
 
 Tela sem bloquear **só no Wi-Fi de casa cadastrado**, sem simular entrada, sem executável e sem alterar configurações: PowerShell legível + `SetThreadExecutionState`.
