@@ -1,7 +1,7 @@
-"""like-move — Mouse jiggler inteligente para Windows.
+"""like-move — mantém o Windows sem bloquear, só quando você quer.
 
-Previne bloqueio de tela por inatividade quando o usuário alterna entre
-PCs via KVM switch. Roda na bandeja do sistema sem janela de console.
+Previne o bloqueio de tela por inatividade (inclusive atrás de um KVM switch)
+sem simular mouse ou teclado. Roda na bandeja do sistema sem janela de console.
 
 Uso: pythonw main.pyw
 """
@@ -19,6 +19,15 @@ logging.basicConfig(
 logger = logging.getLogger("like-move")
 
 
+def _replaced_dir(argv: list[str]) -> str:
+    """Pasta da versão anterior passada em ``--replaced <pasta>`` ("" se ausente)."""
+    from like_move.updater import REPLACED_ARG
+
+    if REPLACED_ARG in argv[:-1]:
+        return argv[argv.index(REPLACED_ARG) + 1]
+    return ""
+
+
 def main() -> None:
     """Entry point principal."""
     # Verificar se está rodando no Windows
@@ -29,6 +38,15 @@ def main() -> None:
     from like_move import __version__
 
     logger.info("Iniciando like-move v%s...", __version__)
+
+    # Aberto pela versão anterior depois de uma atualização: limpa a pasta antiga
+    # e reaponta "Iniciar com Windows" para este executável.
+    if old_dir := _replaced_dir(sys.argv):
+        from like_move import startup, updater
+
+        updater.cleanup_previous(old_dir)
+        if startup.is_startup_enabled():
+            startup.enable_startup()
 
     # Splash screen com fade animation (~2.5 s)
     from like_move.splash import show_splash

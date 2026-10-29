@@ -5,26 +5,20 @@ import enum
 from . import settings
 
 
-# Tempo de inatividade (segundos) antes de começar o jiggle
+# Tempo de inatividade (segundos) antes de manter a máquina acordada
 IDLE_THRESHOLD_SECONDS: int = 30
-
-# Intervalo entre jiggles enquanto idle (segundos)
-JIGGLE_INTERVAL_SECONDS: int = 10
 
 # Intervalo de verificação do estado de idle (segundos)
 CHECK_INTERVAL_SECONDS: int = 1
 
-# Deslocamento do mouse em pixels (ida e volta)
-JIGGLE_PIXELS: int = 1
-
 
 class TriggerMode(enum.Enum):
-    """Modos de trigger para o jiggler."""
+    """Quando manter a máquina acordada."""
 
-    IDLE = "idle"        # Jiggle quando idle > threshold (GetLastInputInfo)
-    KVM = "kvm"          # Jiggle quando dispositivo desconecta
-    BOTH = "both"        # Qualquer trigger ativa o jiggle
-    ALWAYS = "always"    # Jiggle contínuo (controle manual pelo tray)
+    IDLE = "idle"        # Quando idle > threshold (GetLastInputInfo)
+    KVM = "kvm"          # Quando um dispositivo monitorado desconecta
+    BOTH = "both"        # Qualquer uma das duas condições
+    ALWAYS = "always"    # Sempre (controle manual pelo tray)
 
     @classmethod
     def from_value(cls, value: str) -> "TriggerMode":
@@ -36,7 +30,7 @@ class TriggerMode(enum.Enum):
 
 
 class JigglerState:
-    """Estado mutável do jiggler em runtime, persistido em ``%APPDATA%``.
+    """Estado mutável do like-move em runtime, persistido em ``%APPDATA%``.
 
     Na inicialização carrega os valores salvos (ou os defaults). Chame
     :meth:`save` após qualquer mutação para persistir.
@@ -45,10 +39,9 @@ class JigglerState:
     def __init__(self) -> None:
         data = settings.load()
 
-        # Comportamento base do jiggler
+        # Comportamento base
         self.enabled: bool = bool(data.get("enabled", True))
         self.idle_threshold: int = int(data.get("idle_threshold", IDLE_THRESHOLD_SECONDS))
-        self.jiggle_interval: int = int(data.get("jiggle_interval", JIGGLE_INTERVAL_SECONDS))
         self.trigger_mode: TriggerMode = TriggerMode.from_value(
             str(data.get("trigger_mode", TriggerMode.IDLE.value))
         )
@@ -68,7 +61,6 @@ class JigglerState:
         return {
             "enabled": self.enabled,
             "idle_threshold": self.idle_threshold,
-            "jiggle_interval": self.jiggle_interval,
             "trigger_mode": self.trigger_mode.value,
             "monitor_devices": sorted(self.monitor_devices),
             "trusted_only": self.trusted_only,

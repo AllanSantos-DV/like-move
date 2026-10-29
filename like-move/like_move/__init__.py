@@ -1,4 +1,4 @@
-"""like-move — Intelligent Mouse Jiggler for Windows."""
+"""like-move — keeps Windows from locking, only when you want it to."""
 
 import os
 import sys

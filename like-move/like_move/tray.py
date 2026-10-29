@@ -1,4 +1,4 @@
-"""System tray icon com pystray para controle do jiggler."""
+"""System tray icon com pystray para controle do like-move."""
 
 import logging
 from typing import Any, Optional
@@ -10,7 +10,7 @@ import threading
 
 from .config import JigglerState, TriggerMode
 from .device_monitor import DeviceMonitor
-from .jiggler import MonitorThread
+from .awake import MonitorThread
 from .wifi import get_current_connection
 from . import updater
 
@@ -85,7 +85,7 @@ class TrayApp:
         """Alterna entre ativado/desativado."""
         self._state.enabled = not self._state.enabled
         status = "ativado" if self._state.enabled else "desativado"
-        logger.info("Jiggler %s", status)
+        logger.info("like-move %s", status)
 
         # Atualiza ícone para refletir estado
         if self._icon:
@@ -320,7 +320,7 @@ class TrayApp:
             self._icon.update_menu()
 
     def _quit_for_update(self) -> None:
-        """Encerra o app para o helper substituir o binário."""
+        """Encerra o app para a nova versão assumir."""
         logger.info("Encerrando para aplicar atualização...")
         if self._monitor:
             self._monitor.stop()
@@ -346,14 +346,14 @@ class TrayApp:
             self._icon.notify(f"Baixando atualização {info.tag}...", "like-move")
 
         def worker() -> None:
-            bat = updater.download_and_stage(info)
-            if not bat:
+            new_exe = updater.download_and_stage(info)
+            if not new_exe:
                 if self._icon:
                     self._icon.notify(
                         "Falha ao baixar a atualização.", "like-move"
                     )
                 return
-            if updater.launch_helper(bat):
+            if updater.launch_new(new_exe):
                 self._quit_for_update()
             elif self._icon:
                 self._icon.notify(
@@ -508,7 +508,7 @@ class TrayApp:
         icon = Icon(
             name="like-move",
             icon=create_icon_image(self._state.enabled),
-            title="like-move — Mouse Jiggler",
+            title="like-move — tela sem bloquear",
             menu=self._build_menu(),
         )
         self._icon = icon
