@@ -272,3 +272,16 @@ Há também uma página de vitrine estática em [`site/index.html`](site/index.h
 ## 📄 Licença
 
 [MIT](../LICENSE) © Allan Santos
+
+---
+
+## 🛌 Só impedir o sistema de dormir (`keep_awake.pyw`)
+
+Script mínimo e legível (~30 linhas, só stdlib): chama `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)`.
+Não simula mouse/teclado, não usa rede nem registro.
+
+```bash
+pythonw keep_awake.pyw     # sem janela; para parar, encerre o pythonw.exe
+```
+
+Verificação (PowerShell **como administrador**): `powershell -File tests/test_keep_awake.ps1`
