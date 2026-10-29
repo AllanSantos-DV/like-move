@@ -285,3 +285,10 @@ pythonw keep_awake.pyw     # sem janela; para parar, encerre o pythonw.exe
 ```
 
 Verificação (PowerShell **como administrador**): `powershell -File tests/test_keep_awake.ps1`
+
+---
+
+## 🏠 Home Awake (`home-awake/`)
+
+Tela sem bloquear **só no Wi-Fi de casa cadastrado**, sem simular entrada, sem executável e sem alterar configurações: PowerShell legível + `SetThreadExecutionState`.
+Veja `home-awake/LEIA-ME.txt`, `docs/sdd/home-awake.md` e `docs/adr/`.

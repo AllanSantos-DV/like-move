@@ -1,0 +1,34 @@
+HOME AWAKE — a tela não bloqueia SÓ no Wi-Fi de casa
+=====================================================
+
+O que faz
+- Na rede Wi-Fi de casa cadastrada, pede ao Windows "tela e sistema ligados"
+  (SetThreadExecutionState). Fora dela, não faz nada e o Windows bloqueia normalmente.
+- Não mexe no mouse nem no teclado, não acessa a internet, não altera nenhuma
+  configuração de bloqueio. O pedido morre junto com o processo: se ele fechar ou
+  travar, o Windows volta a bloquear sozinho.
+- "Rede de casa" = mesmo nome (SSID), com senha WPA2/WPA3, mesmo ponto de acesso
+  (BSSID) e mesmo roteador (MAC do gateway). Rede aberta com o mesmo nome não conta.
+
+Antes de tudo
+- Botão direito no .zip > Propriedades > marque "Desbloquear" > OK. Depois extraia.
+
+Passo a passo
+1. 1-diagnosticar.cmd  (somente leitura) — mostra o que bloqueia a tela em 30 s e
+   grava diagnostico.txt nesta pasta.
+2. Em casa, conectado no Wi-Fi de casa: 2-cadastrar-rede-de-casa.cmd — grava
+   cadastro.txt. Se a casa tem 2,4 GHz e 5 GHz ou repetidor, conecte em cada um e
+   cadastre de novo (ele acrescenta).
+3. 3-iniciar.cmd — roda sem janela. Registro em
+   %LOCALAPPDATA%\like-move-home-awake\home-awake.log
+4. 4-parar.cmd — encerra; o Windows volta a bloquear normalmente.
+
+Não inicia com o Windows sozinho. Para apagar o cadastro:
+   powershell -NoProfile -ExecutionPolicy Bypass -File home-awake.ps1 -Esquecer
+
+Limites
+- Se o diagnóstico apontar "limite de inatividade da máquina" (política de
+  segurança), o Home Awake não contorna: só você decide mudar essa política.
+- Na bateria, em notebooks com Modern Standby, o Windows pode descartar o pedido
+  alguns minutos após o tempo de suspensão; na tomada não acontece.
+- Ele não segura nada com a tela já bloqueada (Windows não permite).
