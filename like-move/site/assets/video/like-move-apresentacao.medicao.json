@@ -1,0 +1,16 @@
+{
+  "arquivo": "like-move-apresentacao.web.mp4",
+  "bytes": 4003565,
+  "duracao_video_s": 58.0,
+  "streams": [
+    "video,58.000000",
+    "audio,58.000000"
+  ],
+  "duracao_fala_s": 47.75,
+  "fala_cabe_no_video": true,
+  "volumedetect": [
+    "mean_volume: -15.8 dB",
+    "max_volume: -1.1 dB"
+  ],
+  "medido_com": "ffprobe format=duration / stream duration; ffmpeg volumedetect"
+}
