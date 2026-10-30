@@ -171,3 +171,151 @@ Describe 'Format-LockDiagnosis: relatório em português' {
         ($text -join "`n") | Should Match 'CAUSA QUE DISPARA PRIMEIRO \(em 30 s\)'
     }
 }
+
+Describe 'Get-SelfCheckThreshold: o limite a verificar é o primeiro que dispararia' {
+    It 'menor tempo entre as causas' {
+        $causes = @([pscustomobject]@{ Segundos = 600 }, [pscustomobject]@{ Segundos = 30 }, [pscustomobject]@{ Segundos = $null })
+        Get-SelfCheckThreshold $causes | Should Be 30
+    }
+    It 'nenhuma causa: sem limite' {
+        ($null -eq (Get-SelfCheckThreshold @())) | Should Be $true
+    }
+    It 'só causa sem tempo fixo (bloqueio dinâmico): sem limite' {
+        ($null -eq (Get-SelfCheckThreshold @([pscustomobject]@{ Segundos = $null }))) | Should Be $true
+    }
+}
+
+Describe 'Add-SelfCheckSample / Get-SelfCheckVerdict: só prova o que foi observado com o pedido em vigor' {
+    $t0 = Get-Date '2026-10-30 10:00:00'
+    # Cada amostra: segundo desde t0, ociosidade, e o que mudar do estado saudável em casa.
+    function New-Sample([double]$At, [double]$Idle, [hashtable]$Change = @{}) {
+        $s = @{ Now = $t0.AddSeconds($At); Trusted = $true; RequestHeld = $true; IdleSeconds = $Idle; ScreenSaverRunning = $false; Locked = $false }
+        foreach ($k in $Change.Keys) { $s[$k] = $Change[$k] }
+        if (-not $s.ContainsKey('AnyHeld')) { $s.AnyHeld = $s.RequestHeld }
+        [pscustomobject]$s
+    }
+    function Invoke-Run($check, $samples) { foreach ($s in $samples) { Add-SelfCheckSample $check $s }; $check }
+
+    It 'sem amostras: aguardando' {
+        Get-SelfCheckVerdict (New-SelfCheck 30 'x') | Should Be 'Aguardando'
+    }
+    It 'sem limite de bloqueio nas configurações: nada a confirmar' {
+        Get-SelfCheckVerdict (Invoke-Run (New-SelfCheck $null $null) @((New-Sample 0 0), (New-Sample 5 5))) | Should Be 'NaoAplicavel'
+    }
+    It 'continua aguardando abaixo do limite mais a margem' {
+        $c = New-SelfCheck 30 'x'
+        Get-SelfCheckVerdict (Invoke-Run $c (0..7 | ForEach-Object { New-Sample ($_ * 5) ($_ * 5) })) | Should Be 'Aguardando'   # 35 s
+    }
+    It 'ociosidade anterior ao início da observação não conta' {
+        $c = New-SelfCheck 30 'x'
+        # a máquina já estava há 500 s ociosa quando o programa começou a observar: só 10 s observados
+        Get-SelfCheckVerdict (Invoke-Run $c @((New-Sample 0 500), (New-Sample 5 505), (New-Sample 10 510))) | Should Be 'Aguardando'
+    }
+    It 'ociosidade fora de casa não conta' {
+        $c = New-SelfCheck 30 'x'
+        $away = 0..9 | ForEach-Object { New-Sample ($_ * 5) ($_ * 5) @{ Trusted = $false } }
+        $c = Invoke-Run $c $away
+        Get-SelfCheckVerdict (Invoke-Run $c @((New-Sample 50 50), (New-Sample 55 55))) | Should Be 'Aguardando'
+    }
+    It 'confirmado: observou mais que limite + margem parado em casa' {
+        $c = New-SelfCheck 30 'x'
+        Get-SelfCheckVerdict (Invoke-Run $c (0..9 | ForEach-Object { New-Sample ($_ * 5) (100 + $_ * 5) })) | Should Be 'Confirmado'   # 45 s observados >= 40
+    }
+    It 'mexer no mouse zera a ociosidade medida, não o tempo observado' {
+        $c = New-SelfCheck 30 'x'
+        $samples = @((New-Sample 0 100), (New-Sample 5 105), (New-Sample 10 0), (New-Sample 15 5), (New-Sample 20 10))
+        $c = Invoke-Run $c $samples
+        $c.MaxIdleHeld | Should Be 10
+        $c.HeldSeconds | Should Be 20
+    }
+    It 'proteção de tela iniciou com o pedido ativo: risco confirmado' {
+        $c = New-SelfCheck 30 'x'
+        $c = Invoke-Run $c @((New-Sample 0 0), (New-Sample 5 29), (New-Sample 10 34 @{ ScreenSaverRunning = $true }))
+        Get-SelfCheckVerdict $c | Should Be 'Risco'
+        $c.Events[0] | Should Match 'proteção de tela iniciou'
+    }
+    It 'proteção de tela disparada à mão (pouco ocioso) não é risco' {
+        $c = New-SelfCheck 600 'x'
+        Get-SelfCheckVerdict (Invoke-Run $c @((New-Sample 0 0), (New-Sample 5 3 @{ ScreenSaverRunning = $true }))) | Should Not Be 'Risco'
+    }
+    It 'tela bloqueou perto do limite com o pedido ativo: risco confirmado' {
+        $c = New-SelfCheck 30 'x'
+        $samples = @((New-Sample 0 0)) + (1..6 | ForEach-Object { New-Sample ($_ * 5) ($_ * 5) }) + @((New-Sample 35 35 @{ Locked = $true }))
+        $c = Invoke-Run $c $samples
+        Get-SelfCheckVerdict $c | Should Be 'Risco'
+        $c.Events[0] | Should Match 'a tela bloqueou'
+    }
+    It 'bloqueio manual (Win+L) logo depois de mexer não é risco' {
+        $c = New-SelfCheck 30 'x'
+        Get-SelfCheckVerdict (Invoke-Run $c @((New-Sample 0 2), (New-Sample 5 3), (New-Sample 10 8 @{ Locked = $true }))) | Should Be 'Aguardando'
+    }
+    It 'pedido ausente em casa: falha, anotada uma vez' {
+        $c = New-SelfCheck 30 'x'
+        $c = Invoke-Run $c @((New-Sample 0 0), (New-Sample 5 5 @{ RequestHeld = $false }), (New-Sample 10 10 @{ RequestHeld = $false }))
+        Get-SelfCheckVerdict $c | Should Be 'Falha'
+        $c.Events.Count | Should Be 1
+    }
+    It 'fora de casa o pedido ausente é o esperado' {
+        $c = New-SelfCheck 30 'x'
+        Get-SelfCheckVerdict (Invoke-Run $c @((New-Sample 0 0 @{ Trusted = $false; RequestHeld = $false }))) | Should Be 'Aguardando'
+    }
+    It 'intervalo grande entre amostras (suspensão) não conta como tempo observado' {
+        $c = New-SelfCheck 30 'x'
+        $c = Invoke-Run $c @((New-Sample 0 0), (New-Sample 3600 3600))
+        $c.HeldSeconds | Should Be 0
+    }
+    It 'outro programa segurando a tela quando o pedido estava solto: inconclusivo, não confirmado' {
+        $c = New-SelfCheck 30 'x'
+        $samples = @((New-Sample 0 0 @{ Trusted = $false })) + (1..10 | ForEach-Object { New-Sample ($_ * 5) (100 + $_ * 5) })
+        Get-SelfCheckVerdict (Invoke-Run $c $samples) | Should Be 'Inconclusivo'
+    }
+    It 'tela livre quando o pedido estava solto: a confirmação vale' {
+        $c = New-SelfCheck 30 'x'
+        $samples = @((New-Sample 0 0 @{ Trusted = $false; RequestHeld = $false })) + (1..10 | ForEach-Object { New-Sample ($_ * 5) (100 + $_ * 5) })
+        Get-SelfCheckVerdict (Invoke-Run $c $samples) | Should Be 'Confirmado'
+    }
+    It 'risco vence confirmado' {
+        $c = New-SelfCheck 30 'x'
+        $c = Invoke-Run $c ((0..9 | ForEach-Object { New-Sample ($_ * 5) (100 + $_ * 5) }) + @((New-Sample 50 150 @{ ScreenSaverRunning = $true })))
+        Get-SelfCheckVerdict $c | Should Be 'Risco'
+    }
+}
+
+Describe 'Update-SelfCheck: leitura real falha em voz alta e o relatório vai para o arquivo' {
+    $path = Join-Path $env:TEMP ('selfcheck-test-' + [guid]::NewGuid().ToString('N') + '.txt')
+    It 'erro de leitura é anotado uma vez e não conta como amostra boa' {
+        $script:logged = New-Object System.Collections.Generic.List[string]
+        $c = New-SelfCheck 30 'x'
+        1..3 | ForEach-Object { Update-SelfCheck -Check $c -Trusted $true -Log { param($m) $script:logged.Add($m) } -ReadSession { throw 'sem acesso' } -Path $path }
+        $script:logged.Count | Should Be 1
+        $script:logged[0] | Should Match 'leitura falhou: sem acesso'
+        ($null -eq $c.PrevTime) | Should Be $true
+    }
+    It 'grava o relatório na primeira amostra e anota a mudança de resultado' {
+        $script:logged = New-Object System.Collections.Generic.List[string]
+        $c = New-SelfCheck 30 'x'
+        $now = Get-Date
+        Update-SelfCheck -Check $c -Trusted $true -Log { param($m) $script:logged.Add($m) } -Path $path `
+            -ReadSession { [pscustomobject]@{ Now = $now; RequestHeld = $false; AnyHeld = $false; IdleSeconds = 1; ScreenSaverRunning = $false; Locked = $false } }
+        Test-Path $path | Should Be $true
+        (Get-SelfCheckReport $path) -join "`n" | Should Match 'FALHA'
+        ($script:logged -join "`n") | Should Match 'resultado Aguardando -> Falha'
+        Remove-Item $path
+    }
+    It 'sem arquivo, o relatório explica o que fazer' {
+        (Get-SelfCheckReport (Join-Path $env:TEMP 'nao-existe-selfcheck.txt')) | Should Match 'Ainda não há autoverificação'
+    }
+}
+
+Describe 'Format-SelfCheck: relatório em português' {
+    It 'confirmado cita a ociosidade e o limite' {
+        $c = New-SelfCheck 30 'Proteção de tela'
+        $c.MaxIdleHeld = 95; $c.HeldSeconds = 600
+        ((Format-SelfCheck $c) -join "`n") | Should Match 'CONFIRMADO: ficou 95 s sem mouse nem teclado'
+    }
+    It 'risco lista os eventos' {
+        $c = New-SelfCheck 30 'x'
+        $c.Risks = 1; $c.Events.Add('RISCO CONFIRMADO: teste')
+        ((Format-SelfCheck $c) -join "`n") | Should Match 'Eventos:[\s\S]*RISCO CONFIRMADO: teste'
+    }
+}

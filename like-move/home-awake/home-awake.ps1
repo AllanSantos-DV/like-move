@@ -6,6 +6,7 @@
     -Cadastrar     cadastra o Wi-Fi conectado agora como rede de casa e grava cadastro.txt
     -Executar      fica rodando (sem janela) e só mantém a tela acordada na rede de casa
     -Parar         pede ao -Executar para encerrar; o Windows volta a bloquear normalmente
+    -Verificar     mostra a autoverificação: se, na rede de casa, a tela de fato deixou de bloquear
     -Esquecer      apaga o cadastro da rede de casa
 #>
 param(
@@ -13,7 +14,8 @@ param(
     [switch]$Cadastrar,
     [switch]$Executar,
     [switch]$Parar,
-    [switch]$Esquecer
+    [switch]$Esquecer,
+    [switch]$Verificar
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -54,6 +56,9 @@ elseif ($Executar) {
 elseif ($Parar) {
     if (Stop-HomeAwake) { 'Pedido de parada enviado. O Windows volta a bloquear normalmente.' }
     else { 'O Home Awake não estava rodando.' }
+}
+elseif ($Verificar) {
+    Get-SelfCheckReport
 }
 elseif ($Esquecer) {
     if (Unregister-HomeNetwork) { 'Cadastro da rede de casa apagado.' } else { 'Não havia rede cadastrada.' }

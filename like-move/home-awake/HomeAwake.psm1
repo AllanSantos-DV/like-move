@@ -32,6 +32,47 @@ namespace LikeMoveHomeAwake
         public static extern uint CallNtPowerInformationBytes(int level, IntPtr inBuf, uint inLen, byte[] outBuf, uint outLen);
     }
 
+    // Estado da sessão do usuário, lido sem administrador e sem alterar nada.
+    public static class Session
+    {
+        const uint SPI_GETSCREENSAVERRUNNING = 0x0072;
+        const uint DESKTOP_SWITCHDESKTOP = 0x0100;
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+        [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+        [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, ref int value, uint winIni);
+        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
+        [DllImport("user32.dll")] static extern bool CloseDesktop(IntPtr desktop);
+
+        // Segundos desde o último mouse/teclado desta sessão.
+        public static double IdleSeconds()
+        {
+            LASTINPUTINFO info = new LASTINPUTINFO();
+            info.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+            if (!GetLastInputInfo(ref info)) throw new InvalidOperationException("GetLastInputInfo falhou: " + Marshal.GetLastWin32Error());
+            return unchecked((uint)Environment.TickCount - info.dwTime) / 1000.0;
+        }
+
+        public static bool ScreenSaverRunning()
+        {
+            int running = 0;
+            if (!SystemParametersInfo(SPI_GETSCREENSAVERRUNNING, 0, ref running, 0))
+                throw new InvalidOperationException("SPI_GETSCREENSAVERRUNNING falhou: " + Marshal.GetLastWin32Error());
+            return running != 0;
+        }
+
+        // Tela de bloqueio = desktop seguro ativo: a sessão não consegue abrir o desktop de entrada.
+        public static bool Locked()
+        {
+            IntPtr desktop = OpenInputDesktop(0, false, DESKTOP_SWITCHDESKTOP);
+            if (desktop == IntPtr.Zero) return true;
+            CloseDesktop(desktop);
+            return false;
+        }
+    }
+
     public class WifiConnection
     {
         public Guid InterfaceGuid;
@@ -296,6 +337,183 @@ function Write-HomeAwakeLog([string]$Message) {
     Add-Content -Path $script:LogPath -Value ('{0:yyyy-MM-dd HH:mm:ss} {1}' -f (Get-Date), $Message) -Encoding UTF8
 }
 
+# ---------------------------------------------------------------------------
+# Autoverificação: prova, na própria máquina e sem administrador, que o pedido evita o bloqueio
+# ---------------------------------------------------------------------------
+# A doc de SetThreadExecutionState diz que ele não impede a proteção de tela; o teste do wakepy diz que
+# impede (docs/research/home-awake-lock-prevention-research.md). Só a máquina real responde, então enquanto
+# está na rede de casa o programa mede a ociosidade e anota o que aconteceu em autoverificacao.txt.
+$script:SelfCheckPath = Join-Path $script:DataDir 'autoverificacao.txt'
+$script:SelfCheckMarginSeconds = 10    # ociosidade acima do limite para valer como prova (jitter entre amostras)
+$script:SelfCheckMaxGapSeconds = 120   # amostras mais espaçadas (suspensão, travamento) não contam como tempo observado
+
+function Get-SelfCheckThreshold {
+    # Puro: o menor tempo de ociosidade entre as causas de bloqueio encontradas (null = nenhuma).
+    param($Causes)
+    $secs = @($Causes | Where-Object { $_ -and $null -ne $_.Segundos } | ForEach-Object { [int]$_.Segundos })
+    if ($secs.Count -eq 0) { return $null }
+    ($secs | Measure-Object -Minimum).Minimum
+}
+
+function New-SelfCheck {
+    param($ThresholdSeconds, [string]$ThresholdCause)
+    [pscustomobject]@{
+        ThresholdSeconds = $ThresholdSeconds
+        ThresholdCause   = $ThresholdCause
+        HeldSeconds      = 0.0    # tempo observado em casa
+        ContinuousSeconds = 0.0   # tempo seguido com o pedido em vigor e a tela destravada
+        MaxIdleHeld      = 0.0    # maior ociosidade já observada com o pedido em vigor e sem bloqueio
+        Events           = New-Object System.Collections.Generic.List[string]
+        Failures         = 0
+        Risks            = 0
+        RequestLost      = $false
+        ForeignSeen      = $false   # outro programa segurava a tela na última vez que o nosso pedido estava solto
+        ScreenSaverSeen  = $false
+        PrevTime         = $null
+        PrevTrusted      = $false
+        PrevLocked       = $false
+        PrevHeldIdle     = 0.0
+        LastError        = $null
+        LastSaved        = $null
+    }
+}
+
+function Add-SelfCheckSample {
+    <#
+    Puro (só altera $Check). Sample: Now, Trusted, RequestHeld (SYSTEM e DISPLAY no estado do sistema),
+    AnyHeld (SYSTEM ou DISPLAY), IdleSeconds, ScreenSaverRunning, Locked. Ociosidade só vale como prova enquanto o pedido esteve em vigor
+    sem interrupção: ficar ocioso fora de casa, ou antes de o programa começar a observar, não conta.
+    #>
+    param($Check, $Sample)
+    $c = $Check; $s = $Sample; $limit = $c.ThresholdSeconds
+    $gap = if ($c.PrevTime) { ($s.Now - $c.PrevTime).TotalSeconds } else { 0 }
+    $observed = $c.PrevTrusted -and $gap -gt 0 -and $gap -le $script:SelfCheckMaxGapSeconds
+
+    # Fora de casa o nosso pedido está solto: se o estado do sistema segue ligado, é outro programa (vídeo, apresentação).
+    if (-not $s.Trusted) { $c.ForeignSeen = [bool]$s.AnyHeld }
+    if ($s.Trusted -and $observed) { $c.HeldSeconds += $gap }
+    $healthy = $s.Trusted -and $s.RequestHeld -and -not $s.Locked -and -not $s.ScreenSaverRunning
+    if ($healthy -and $observed) { $c.ContinuousSeconds += $gap } elseif (-not $healthy) { $c.ContinuousSeconds = 0.0 }
+    $heldIdle = [Math]::Min([double]$s.IdleSeconds, $c.ContinuousSeconds)
+
+    if ($s.Trusted) {
+        if (-not $s.RequestHeld) {
+            if (-not $c.RequestLost) {
+                $c.RequestLost = $true; $c.Failures++
+                $c.Events.Add('FALHA: o pedido de tela e sistema ligados não aparece no estado do sistema (o Windows o descartou?)')
+            }
+        } else { $c.RequestLost = $false }
+        if ($null -ne $limit) {
+            if ($s.ScreenSaverRunning -and $s.IdleSeconds -ge $limit) {
+                if (-not $c.ScreenSaverSeen) {
+                    $c.ScreenSaverSeen = $true; $c.Risks++
+                    $c.Events.Add(('RISCO CONFIRMADO: a proteção de tela iniciou com o pedido ativo (ocioso há {0:N0} s, limite {1} s)' -f $s.IdleSeconds, $limit))
+                }
+            } elseif (-not $s.ScreenSaverRunning) { $c.ScreenSaverSeen = $false }
+            if ($s.Locked -and -not $c.PrevLocked -and $c.PrevTrusted -and $c.PrevHeldIdle -ge ($limit - $script:SelfCheckMarginSeconds)) {
+                $c.Risks++
+                $c.Events.Add(('RISCO CONFIRMADO: a tela bloqueou com o pedido ativo (ocioso há ~{0:N0} s, limite {1} s)' -f $c.PrevHeldIdle, $limit))
+            }
+            if ($healthy -and $heldIdle -gt $c.MaxIdleHeld) { $c.MaxIdleHeld = $heldIdle }
+        }
+    }
+    $c.PrevTime = $s.Now; $c.PrevTrusted = [bool]$s.Trusted; $c.PrevLocked = [bool]$s.Locked; $c.PrevHeldIdle = $heldIdle
+}
+
+function Get-SelfCheckVerdict {
+    # Puro: Risco e Falha vencem tudo; Confirmado exige ociosidade acima do limite + margem com o pedido em vigor.
+    param($Check)
+    $c = $Check
+    if ($c.Risks -gt 0) { return 'Risco' }
+    if ($c.Failures -gt 0) { return 'Falha' }
+    if ($null -eq $c.ThresholdSeconds) { return 'NaoAplicavel' }
+    if ($c.MaxIdleHeld -ge ($c.ThresholdSeconds + $script:SelfCheckMarginSeconds)) {
+        # Com outro programa segurando a tela, não bloquear não prova nada sobre o nosso pedido.
+        if ($c.ForeignSeen) { return 'Inconclusivo' }
+        return 'Confirmado'
+    }
+    'Aguardando'
+}
+
+function Format-SelfCheck {
+    param($Check, [bool]$Running = $true)
+    $c = $Check
+    $limit = $c.ThresholdSeconds
+    $cause = if ($c.ThresholdCause) { " (causa: $($c.ThresholdCause))" } else { '' }
+    $result = switch (Get-SelfCheckVerdict $c) {
+        'Confirmado' { ('CONFIRMADO: ficou {0:N0} s sem mouse nem teclado na rede de casa (limite do bloqueio: {1} s{2}) e a tela não bloqueou nem a proteção de tela iniciou.' -f $c.MaxIdleHeld, $limit, $cause) }
+        'Risco'      { 'RISCO CONFIRMADO: o pedido NÃO bastou nesta máquina; veja os eventos. O Home Awake não muda configuração de bloqueio sozinho.' }
+        'Falha'      { 'FALHA: o pedido de tela ligada não ficou em vigor; veja os eventos.' }
+        'Inconclusivo' { 'INCONCLUSIVO: a tela não bloqueou, mas outro programa (vídeo, apresentação, outro keep-awake) também segurava a tela. Feche-os, deixe o notebook parado em casa e repita.' }
+        'NaoAplicavel' { 'NADA A CONFIRMAR: as configurações lidas não têm bloqueio por inatividade. Se a tela bloquear mesmo assim, rode o 1-diagnosticar.cmd e envie o diagnostico.txt.' }
+        default {
+            if ($c.HeldSeconds -le 0) { 'AGUARDANDO: ainda não esteve na rede de casa.' }
+            else { ('AGUARDANDO: em casa há {0:N0} min, mas a máquina ainda não ficou parada por mais de {1} s (limite {2} s{3} + margem). Deixe-a sem tocar no mouse/teclado.' -f ($c.HeldSeconds / 60), ($limit + $script:SelfCheckMarginSeconds), $limit, $cause) }
+        }
+    }
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("Autoverificação do Home Awake — $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') — $env:COMPUTERNAME")
+    $lines.Add($result)
+    $lines.Add(('Tempo observado em casa: {0:N1} min; maior ociosidade sem bloqueio: {1:N0} s; limite verificado: {2}.' -f ($c.HeldSeconds / 60), $c.MaxIdleHeld, $(if ($null -ne $limit) { "$limit s" } else { 'nenhum' })))
+    $lines.Add("Programa: $(if ($Running) { 'rodando' } else { 'encerrado' })")
+    if ($c.Events.Count -gt 0) {
+        $lines.Add('Eventos:')
+        foreach ($e in $c.Events) { $lines.Add("  - $e") }
+    }
+    $lines
+}
+
+function Save-SelfCheck {
+    param($Check, [bool]$Running = $true, [string]$Path = $script:SelfCheckPath)
+    New-Item -ItemType Directory -Force -Path (Split-Path $Path -Parent) | Out-Null
+    Format-SelfCheck $Check $Running | Set-Content -Path $Path -Encoding UTF8
+}
+
+function Get-LiveSession {
+    # Impuro: o que o Windows diz agora. Erro de leitura sobe: quem chama anota, nunca vira "tudo certo".
+    $bits = (Get-SystemExecutionState) -band 3
+    [pscustomobject]@{
+        Now                = Get-Date
+        RequestHeld        = $bits -eq 3
+        AnyHeld            = $bits -ne 0
+        IdleSeconds        = [LikeMoveHomeAwake.Session]::IdleSeconds()
+        ScreenSaverRunning = [LikeMoveHomeAwake.Session]::ScreenSaverRunning()
+        Locked             = [LikeMoveHomeAwake.Session]::Locked()
+    }
+}
+
+function Update-SelfCheck {
+    param($Check, [bool]$Trusted, [scriptblock]$Log, [scriptblock]$ReadSession = { Get-LiveSession }, [string]$Path = $script:SelfCheckPath)
+    $before = Get-SelfCheckVerdict $Check
+    $events = $Check.Events.Count
+    try {
+        $live = & $ReadSession
+    } catch {
+        $msg = "autoverificação: leitura falhou: $($_.Exception.Message)"
+        if ($Check.LastError -ne $msg) { $Check.LastError = $msg; & $Log $msg }
+        return
+    }
+    $Check.LastError = $null
+    Add-SelfCheckSample $Check ([pscustomobject]@{
+        Now = $live.Now; Trusted = $Trusted; RequestHeld = $live.RequestHeld; AnyHeld = $live.AnyHeld; IdleSeconds = $live.IdleSeconds
+        ScreenSaverRunning = $live.ScreenSaverRunning; Locked = $live.Locked })
+    for ($i = $events; $i -lt $Check.Events.Count; $i++) { & $Log "autoverificação: $($Check.Events[$i])" }
+    $after = Get-SelfCheckVerdict $Check
+    if ($after -ne $before) { & $Log "autoverificação: resultado $before -> $after" }
+    # Grava ao mudar o resultado, a cada evento novo e a cada 5 min, para o relatório mostrar o andamento.
+    $due = -not $Check.LastSaved -or ($live.Now - $Check.LastSaved).TotalSeconds -ge 300
+    if ($after -ne $before -or $Check.Events.Count -ne $events -or $due) {
+        Save-SelfCheck $Check $true $Path
+        $Check.LastSaved = $live.Now
+    }
+}
+
+function Get-SelfCheckReport {
+    param([string]$Path = $script:SelfCheckPath)
+    if (-not (Test-Path $Path)) { return 'Ainda não há autoverificação. Rode o 3-iniciar.cmd na rede de casa e deixe o notebook parado.' }
+    Get-Content $Path -Encoding UTF8
+}
+
 function Invoke-HomeAwakeLoop {
     <#
     Reavalia a rede a cada sinal e mantém o pedido de "acordado" só enquanto a rede de casa
@@ -331,6 +549,24 @@ function Invoke-HomeAwakeLoop {
     }
 }
 
+function New-StartupSelfCheck([scriptblock]$Log) {
+    # Sem as configurações não há limite a verificar: anota e segue sem autoverificação de bloqueio.
+    try {
+        $causes = @(Get-LockDiagnosis (Get-LockSettings) | Where-Object { $_ })
+        $limit = Get-SelfCheckThreshold $causes
+        $cause = if ($limit) { ($causes | Where-Object { $_.Segundos -eq $limit } | Select-Object -First 1).Causa } else { $null }
+    } catch {
+        & $Log "autoverificação: não consegui ler as configurações de bloqueio: $($_.Exception.Message)"
+        $limit = $null; $cause = $null
+    }
+    & $Log "autoverificação: limite de bloqueio $(if ($limit) { "$limit s ($cause)" } else { 'nenhum encontrado' }); relatório em $script:SelfCheckPath"
+    $check = New-SelfCheck $limit $cause
+    # Ainda sem pedido nosso: qualquer bit ligado agora é de outro programa.
+    try { $check.ForeignSeen = ((Get-SystemExecutionState) -band 3) -ne 0 } catch { & $Log "autoverificação: não consegui ler o estado de energia: $($_.Exception.Message)" }
+    Save-SelfCheck $check $true
+    $check
+}
+
 function Start-HomeAwake {
     $created = $false
     $mutex = New-Object System.Threading.Mutex($true, $script:InstanceMutexName, [ref]$created)
@@ -341,18 +577,30 @@ function Start-HomeAwake {
         Write-HomeAwakeLog "iniciado (rede cadastrada: $(if ($enrolled) { $enrolled.Ssid } else { 'nenhuma' }))"
         [LikeMoveHomeAwake.NetWatch]::Start()
         $handles = [System.Threading.WaitHandle[]]@($stop, [LikeMoveHomeAwake.NetWatch]::Changed)
-        Invoke-HomeAwakeLoop -Enrolled $enrolled `
-            -GetIdentity { Get-NetworkIdentity } `
-            -SetAwake { param($on) Set-KeepAwake $on } `
-            -Log { param($m) Write-HomeAwakeLog $m } `
-            -WaitForSignal {
-                # 60 s: renova o pedido e reconfere a rede mesmo se algum evento se perder.
-                switch ([System.Threading.WaitHandle]::WaitAny($handles, 60000)) {
-                    0 { 'stop' }
-                    1 { 'change' }
-                    default { 'timeout' }
+        $log = { param($m) Write-HomeAwakeLog $m }
+        $check = New-StartupSelfCheck $log
+        $ctx = [pscustomobject]@{ Trusted = $false }
+        try {
+            Invoke-HomeAwakeLoop -Enrolled $enrolled `
+                -GetIdentity { Get-NetworkIdentity } `
+                -SetAwake { param($on) Set-KeepAwake $on; $ctx.Trusted = $on } `
+                -Log $log `
+                -WaitForSignal {
+                    # 60 s: renova o pedido e reconfere a rede mesmo se algum evento se perder.
+                    # A cada 5 s a autoverificação mede a ociosidade e o estado da tela.
+                    $deadline = (Get-Date).AddSeconds(60)
+                    while (($left = ($deadline - (Get-Date)).TotalMilliseconds) -gt 0) {
+                        switch ([System.Threading.WaitHandle]::WaitAny($handles, [int][Math]::Min(5000, $left))) {
+                            0 { return 'stop' }
+                            1 { return 'change' }
+                        }
+                        Update-SelfCheck -Check $check -Trusted $ctx.Trusted -Log $log
+                    }
+                    'timeout'
                 }
-            }
+        } finally {
+            Save-SelfCheck $check $false
+        }
     } finally {
         $stop.Dispose()
         $mutex.ReleaseMutex()
@@ -489,4 +737,6 @@ function Format-LockDiagnosis {
 
 Export-ModuleMember -Function Get-NetworkIdentity, Test-HomeNetwork, Get-HomeNetwork, New-HomeNetworkEnrollment,
     Register-HomeNetwork, Unregister-HomeNetwork, Set-KeepAwake, Get-SystemExecutionState, Invoke-HomeAwakeLoop,
-    Start-HomeAwake, Stop-HomeAwake, Get-LockSettings, Get-LockDiagnosis, Format-LockDiagnosis, Write-HomeAwakeLog
+    Start-HomeAwake, Stop-HomeAwake, Get-LockSettings, Get-LockDiagnosis, Format-LockDiagnosis, Write-HomeAwakeLog,
+    Get-SelfCheckThreshold, New-SelfCheck, Add-SelfCheckSample, Get-SelfCheckVerdict, Format-SelfCheck,
+    Save-SelfCheck, Update-SelfCheck, Get-SelfCheckReport, Get-LiveSession

@@ -22,6 +22,26 @@ Passo a passo
 3. 3-iniciar.cmd — roda sem janela. Registro em
    %LOCALAPPDATA%\like-move-home-awake\home-awake.log
 4. 4-parar.cmd — encerra; o Windows volta a bloquear normalmente.
+5. 5-verificar.cmd — mostra a autoverificação (veja abaixo), com o programa rodando ou depois de parar.
+
+Autoverificação
+- Enquanto roda, o Home Awake mede a cada 5 s há quanto tempo você não toca no mouse/teclado
+  e se a proteção de tela iniciou ou a tela bloqueou. Só o tempo passado na rede de casa conta
+  como prova; fora dela ele apenas observa se outro programa já segura a tela. Isso responde
+  se o pedido de tela ligada de fato impede o bloqueio NESTE notebook (a documentação da
+  Microsoft e os testes de terceiros divergem quanto à proteção de tela).
+- O resultado fica em %LOCALAPPDATA%\like-move-home-awake\autoverificacao.txt e no log.
+  Para ler: 5-verificar.cmd. Resultados:
+    CONFIRMADO     ficou parado mais que o limite do bloqueio + 10 s (limite de 30 s: 40 s)
+                   e a tela não bloqueou.
+    AGUARDANDO     ainda não ficou parado tempo suficiente em casa: deixe-o sem mexer.
+    INCONCLUSIVO   outro programa (vídeo, apresentação) também segurava a tela: feche-o
+                   e repita.
+    NADA A CONFIRMAR  as configurações lidas não têm bloqueio por inatividade; se a tela
+                   bloquear mesmo assim, envie o diagnostico.txt (1-diagnosticar.cmd).
+    RISCO CONFIRMADO / FALHA   o bloqueio ocorreu mesmo com o pedido, ou o pedido não
+                   ficou em vigor: mande o arquivo para quem mantém o programa.
+- Só observa e anota: não muda nenhuma configuração nem contorna política de segurança.
 
 Não inicia com o Windows sozinho. Para apagar o cadastro:
    powershell -NoProfile -ExecutionPolicy Bypass -File home-awake.ps1 -Esquecer

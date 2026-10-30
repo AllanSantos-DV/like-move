@@ -6,6 +6,7 @@ Prova real, sem administrador, nesta máquina:
      ele apaga; ao voltar acende; ao parar apaga.
   C) morte abrupta (Stop-Process -Force): o Windows libera o pedido sozinho.
   D) nenhuma configuração de bloqueio muda em nenhum momento (Get-LockSettings antes = durante = depois).
+  E) autoverificação com a sessão real: lê ociosidade, proteção de tela e bloqueio do Windows e não acusa risco nem falha.
 O estado é lido de OUTRO processo com CallNtPowerInformation(SystemExecutionState).
 #>
 Set-StrictMode -Version Latest
@@ -44,6 +45,10 @@ try {
     "   -Executar encerrou, exit code $($runner.ExitCode)"
     '   log do -Executar:'
     Get-Content "$sandbox\like-move-home-awake\home-awake.log" | ForEach-Object { "     $_" }
+    $selfA = Get-Content "$sandbox\like-move-home-awake\autoverificacao.txt" -Encoding UTF8
+    '   autoverificação do -Executar (fora de casa):'; $selfA | ForEach-Object { "     $_" }
+    Assert (($selfA -join "`n") -match 'AGUARDANDO: ainda não esteve na rede de casa') 'autoverificação fora de casa deveria aguardar'
+    Assert (($selfA -join "`n") -match 'Programa: encerrado') 'autoverificação final não foi gravada ao parar'
 } finally {
     $env:LOCALAPPDATA = $realLocal
 }
@@ -86,6 +91,32 @@ Assert ((Show-State 'C) em casa, antes de matar o processo')) 'não segurou a te
 Stop-Process -Id $p.Id -Force
 Start-Sleep -Seconds 2
 Assert (-not (Show-State 'C) depois de Stop-Process -Force')) 'pedido ficou após morte abrupta'
+
+# --- E) autoverificação com a sessão real (ociosidade, proteção de tela e bloqueio lidos do Windows) ---------
+# Limite de 1 s: em ~16 s observados com o pedido em vigor a verificação precisa fechar sem risco nem falha.
+# Se alguém mexer no mouse nesse intervalo o resultado fica "Aguardando", o que também é aceito.
+$childE = Join-Path $sandbox 'childE.ps1'
+$reportE = Join-Path $sandbox 'autoverificacao.txt'
+@"
+Import-Module '$root\HomeAwake.psm1' -Force
+`$check = New-SelfCheck 1 'teste'
+`$check.ForeignSeen = ((Get-SystemExecutionState) -band 3) -ne 0
+Set-KeepAwake `$true
+1..16 | ForEach-Object {
+  Start-Sleep -Seconds 1
+  Update-SelfCheck -Check `$check -Trusted `$true -Path '$reportE' -Log { param(`$m) Add-Content '$sandbox\childE.log' `$m }
+}
+Set-KeepAwake `$false
+Save-SelfCheck `$check `$false '$reportE'
+"@ | Set-Content $childE -Encoding UTF8
+$pe = Start-Process $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$childE`"" -PassThru -WindowStyle Hidden
+Assert ($pe.WaitForExit(60000)) 'autoverificação não terminou'
+Assert ($pe.ExitCode -eq 0) "autoverificação saiu com código $($pe.ExitCode)"
+$reportText = (Get-Content $reportE -Encoding UTF8) -join "`n"
+'E) autoverificação com a sessão real:'; $reportText -split "`n" | ForEach-Object { "     $_" }
+Assert ($reportText -notmatch 'RISCO|FALHA') 'a autoverificação acusou risco ou falha'
+Assert ($reportText -match 'CONFIRMADO|AGUARDANDO') 'resultado inesperado'
+Assert (-not (Show-State 'E) depois da autoverificação')) 'pedido ficou após a autoverificação'
 
 # --- D) configurações intactas ------------------------------------------------------------------
 $after = Settings-Snapshot
