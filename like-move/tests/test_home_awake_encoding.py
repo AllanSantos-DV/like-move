@@ -1,4 +1,4 @@
-"""Os scripts PowerShell do projeto com texto fora do ASCII precisam de BOM UTF-8.
+"""Os scripts PowerShell do projeto com texto fora do ASCII precisam de BOM UTF-8 (.ps1, .psm1 e .cmd).
 
 O Windows PowerShell 5.1 lê arquivo sem BOM na página de código ANSI do sistema (1252 numa instalação
 comum). Em 1252 o travessão "—" vira "â€”" e o último caractere é uma aspa tipográfica, que o PowerShell
@@ -19,7 +19,7 @@ def powershell_scripts():
     for folder, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for name in files:
-            if name.lower().endswith((".ps1", ".psm1")):
+            if name.lower().endswith((".ps1", ".psm1", ".cmd")):
                 yield os.path.join(folder, name)
 
 
