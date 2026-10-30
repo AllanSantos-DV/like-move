@@ -156,7 +156,8 @@ export function startApp(exe) {
 
 /** Roda o passo 1 do Home Awake (somente leitura) neste mesmo terminal. */
 export function runHomeAwakeDiagnosis(dir) {
-  const r = spawnSync("cmd.exe", ["/d", "/c", "1-diagnosticar.cmd"], { cwd: dir, stdio: "inherit" });
+  // ".\" explícito: com NoDefaultCurrentDirectoryInExePath definido o cmd não procura o nome solto na pasta atual.
+  const r = spawnSync("cmd.exe", ["/d", "/c", ".\\1-diagnosticar.cmd"], { cwd: dir, stdio: "inherit", windowsHide: true });
   if (r.error) throw new Error(`não consegui rodar 1-diagnosticar.cmd: ${r.error.message}`);
   if (r.status !== 0) throw new Error(`1-diagnosticar.cmd terminou com código ${r.status}`);
 }
