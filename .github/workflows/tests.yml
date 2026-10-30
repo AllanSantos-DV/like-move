@@ -49,6 +49,24 @@ jobs:
           Write-Host "Pester: passed=$($r.PassedCount) failed=$($r.FailedCount)"
           if ($r.FailedCount -gt 0 -or $r.PassedCount -eq 0) { exit 1 }
 
+  # Pacote npm (npx like-move): node 20 é o mínimo declarado em engines.
+  npm-package:
+    name: tests (pacote npm, Node 20)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unit tests
+        working-directory: like-move/npm
+        run: npm test
+
   # requirements.txt declara Pillow>=9.1.0: as outras vagas instalam a última versão e nunca testam o piso.
   pillow-floor:
     name: tests (Python 3.9, Pillow 9.1.0)

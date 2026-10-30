@@ -34,6 +34,11 @@
   header.hero h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.15; margin: 0 0 12px; }
   header.hero p { color: var(--muted); font-size: 18px; margin: 0 auto 22px; max-width: 640px; }
   .paths { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .install { display: inline-flex; align-items: center; gap: 10px; margin: 0 auto 18px; padding: 8px 8px 8px 18px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--green); }
+  .install code { background: none; padding: 0; font-size: 18px; font-family: Consolas, "Cascadia Mono", monospace; color: var(--text); }
+  .install button { font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 14px; border-radius: 999px; border: 0; background: var(--green); color: var(--green-ink); }
+  .install button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  .install-note { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
 
   .video { margin: 28px auto 8px; max-width: 960px; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); background: #000; }
   .video video { display: block; width: 100%; height: auto; }
@@ -78,9 +83,14 @@
   <header class="hero">
     <h1>A tela não bloqueia no meio da conversa</h1>
     <p>O like-move mantém o Windows sem bloquear por inatividade, só quando você quer e só nas redes em que você confia.</p>
+    <div class="install" aria-label="Comando de instalação">
+      <code id="cmd">npx like-move</code>
+      <button type="button" data-copy="npx like-move">Copiar</button>
+    </div>
+    <p class="install-note">No terminal, com Node.js 20 ou mais novo. Instala e abre sem administrador, conferindo o sha256 do download.</p>
     <div class="paths">
       <a class="btn" href="#video">▶ Assistir ao vídeo</a>
-      <a class="btn primary" href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/like-move-win64.zip">⬇ Baixar para Windows</a>
+      <a class="btn" href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/like-move-win64.zip">⬇ Sem Node: baixar o zip</a>
       <a class="btn" href="#recursos">Ver o que faz</a>
     </div>
   </header>
@@ -148,19 +158,26 @@
   <section id="como-usar">
     <h2>Como usar</h2>
     <ol class="steps">
-      <li><a href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/like-move-win64.zip">Baixe o <code>like-move-win64.zip</code></a> e extraia numa pasta sua (ex.: <code>Documentos\like-move</code>).</li>
-      <li>Abra <code>like-move.exe</code>. O ícone verde aparece na bandeja do sistema.</li>
+      <li>No terminal, rode <code>npx like-move</code>. Ele baixa a versão mais recente, confere o sha256, instala em <code>%LOCALAPPDATA%\Programs\like-move</code> e abre o app: o ícone verde aparece na bandeja do sistema.
+        <br />Sem Node: <a href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/like-move-win64.zip">baixe o <code>like-move-win64.zip</code></a>, extraia numa pasta sua (ex.: <code>Documentos\like-move</code>) e abra <code>like-move.exe</code>.</li>
       <li>Clique com o botão direito no ícone e escolha o modo, o tempo e, se quiser, <b>Só em redes confiáveis</b>.</li>
       <li>Opcional: marque <b>Iniciar com Windows</b>.</li>
     </ol>
     <p class="lead" style="margin-top:18px">Windows 10 ou 11. Não precisa de Python, instalação nem administrador.
       Prefere scripts que você lê antes de rodar? Há uma versão em PowerShell que age só no Wi-Fi de casa:
-      <a href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/home-awake.zip">home-awake.zip</a>.</p>
+      <code>npx like-move home-awake</code> (ou <a href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/home-awake.zip">home-awake.zip</a>).</p>
   </section>
 </main>
 
 <footer>
   <div class="wrap">like-move · licença MIT · <a href="https://github.com/AllanSantos-DV/like-move">código no GitHub</a></div>
 </footer>
+<script>
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copiado"; }
+    catch { b.textContent = "Selecione e copie"; }
+    setTimeout(() => { b.textContent = "Copiar"; }, 2000);
+  }));
+</script>
 </body>
 </html>

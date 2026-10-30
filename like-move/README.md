@@ -44,19 +44,33 @@
 
 ---
 
-## 📥 Download
+## 📥 Instalar
 
-Baixe a versão mais recente na [página de releases](../../releases/latest):
+Com Node.js 20 ou mais novo, um comando no terminal (sem administrador):
+
+```
+npx like-move
+```
+
+Ele baixa `like-move-win64.zip` da release, confere o sha256 com o que vem dentro do [pacote npm](https://www.npmjs.com/package/like-move) (nada é instalado se não bater), extrai em `%LOCALAPPDATA%\Programs\like-move\like-move-<versão>` e abre o app. O ícone aparece na bandeja do sistema (system tray). Para o Home Awake: `npx like-move home-awake` (instala os scripts e roda o diagnóstico, somente leitura). Opções: `--dir <pasta>` instala em outra pasta, `--no-start` só instala.
+
+Sem Node, baixe o zip na [página de releases](../../releases/latest):
 
 > **[⬇ Baixar like-move-win64.zip](../../releases/latest/download/like-move-win64.zip)** — pasta pronta, não requer Python nem instalação.
 
-Extraia o zip e abra `like-move\like-move.exe`. O ícone aparece na bandeja do sistema (system tray).
+Extraia o zip e abra `like-move\like-move.exe`.
 
 ---
 
 ## 🚀 Instalação
 
-### Executável standalone (recomendado)
+### Com npm (recomendado)
+
+```
+npx like-move
+```
+
+### Executável standalone (zip)
 
 1. Baixe `like-move-win64.zip` na [página de releases](../../releases/latest)
 2. Extraia numa pasta sua (ex.: `Documentos\like-move`) e abra `like-move.exe` — o ícone aparece na bandeja
@@ -251,6 +265,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -Re
 
 O workflow `Tests` roda os testes do Python (3.9, o mínimo, e 3.12) e do Home Awake a cada push na `develop`/`master` e em pull request. O workflow de release roda ao enviar uma tag `v*` (criada na `master`): chama o workflow `Tests` e só segue se ele passar, confere que o commit da tag está na `master` e que a tag bate com o `VERSION`, compila o bootloader do PyInstaller no runner, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
 
+Publicar a release dispara o workflow `Publish npm`: confere que a tag bate com o `VERSION` e com o `npm/package.json` e que o commit está na `master`, baixa os dois zips e grava o sha256 deles em `npm/release.json` (cada hash tem de bater com o digest que o GitHub publica), roda os testes do pacote e publica `like-move` no npm por publicação confiável (OIDC), com proveniência. Ao subir o `VERSION`, suba junto a `version` de `npm/package.json` (o workflow `Tests` falha se divergirem). Testes do pacote: `cd npm && npm test`.
+
 ### Regenerar ícone
 
 ```bash
@@ -287,4 +303,4 @@ Há também uma página de vitrine estática em [`site/index.html`](site/index.h
 ## 🏠 Home Awake (`home-awake/`)
 
 Tela sem bloquear **só no Wi-Fi de casa cadastrado**, sem simular entrada, sem executável e sem alterar configurações: PowerShell legível + `SetThreadExecutionState`.
-Veja `home-awake/LEIA-ME.txt`: passo a passo, o que cada resultado da autoverificação significa e os limites.
+Para instalar: `npx like-move home-awake` (ou baixe `home-awake.zip` na [página de releases](../../releases/latest)). Veja `home-awake/LEIA-ME.txt`: passo a passo, o que cada resultado da autoverificação significa e os limites.

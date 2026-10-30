@@ -1,0 +1,73 @@
+# Publica o pacote npm `like-move` (npx like-move) quando uma release do app é publicada: a release nasce
+# rascunho no release.yml e só é publicada depois de verificada pelo antivírus, então o pacote só aponta para
+# zips já verificados. O pacote N.N.N instala a release vN.N.N, com o sha256 de cada zip embarcado (release.json).
+#
+# Publicação confiável (OIDC), como o engine-kit: sem token em segredo nenhum e com proveniência.
+# O nome deste arquivo (npm-publish.yml) é o que o cadastro do publisher confiável no npmjs.com aponta: renomear quebra.
+# Disparo manual (workflow_dispatch) serve para publicar uma release que já estava publicada antes deste workflow.
+
+name: Publish npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de uma release já publicada (ex.: v1.3.4)"
+        required: true
+
+permissions:
+  id-token: write   # OIDC da publicação confiável
+  contents: read
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Os testes do pacote usam o tar.exe do Windows; runner hospedado pelo GitHub (a proveniência exige).
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: like-move/npm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Publicação confiável exige npm 11.5.1 ou mais.
+      - name: npm 11
+        run: |
+          npm install -g npm@11
+          node -e "const [a,b,c]=process.argv[1].split('.').map(Number);if(a<11||(a===11&&(b<5||(b===5&&c<1)))){console.error('npm '+process.argv[1]+' < 11.5.1');process.exit(1)}" "$(npm --version)"
+
+      - name: Tag = VERSION = package.json, commit na master
+        run: |
+          v="$(tr -d '\r\n' < ../VERSION)"
+          test "$TAG" = "v$v" || { echo "tag $TAG não corresponde a like-move/VERSION ($v)"; exit 1; }
+          test "$(node -p "require('./package.json').version")" = "$v" || { echo "package.json fora da versão $v"; exit 1; }
+          git fetch origin master
+          git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/master || { echo "o commit da tag não está na master"; exit 1; }
+
+      - name: sha256 dos zips da release (conferidos com o digest do GitHub)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release-hashes.mjs
+
+      - name: Testes do pacote
+        run: npm test
+
+      - name: Publicar com proveniência
+        run: npm publish --access public --provenance

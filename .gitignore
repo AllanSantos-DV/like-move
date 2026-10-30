@@ -7,3 +7,7 @@ docs/
 # Metadados do gerador de voz/video: ficam no disco, nao vao para o git nem para o Pages
 like-move/site/**/*.voz.json
 like-move/site/**/*.medicao.json
+
+# Gerado na publicacao do npm (scripts/release-hashes.mjs) a partir da release ja publicada
+like-move/npm/release.json
+like-move/npm/*.tgz
