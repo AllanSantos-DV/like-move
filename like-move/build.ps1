@@ -1,9 +1,10 @@
-<#
+﻿<#
 .SYNOPSIS
     Build like-move (pasta onedir) e o zip de distribuição.
 
 .DESCRIPTION
     Roda o spec do PyInstaller e empacota dist\like-move\ em dist\like-move-win64.zip.
+    Também gera dist\home-awake.zip, pelo mesmo package-home-awake.ps1 que a CI usa.
     Com -CompileBootloader, reinstala o PyInstaller compilando o bootloader localmente
     (exige o compilador C do Visual Studio Build Tools): o bootloader pré-compilado é
     compartilhado por todo usuário de PyInstaller e aparece em listas de antivírus.
@@ -43,8 +44,9 @@ try {
     $zip = 'dist\like-move-win64.zip'
     Compress-Archive -Path 'dist\like-move' -DestinationPath $zip
     $sizeMB = [math]::Round((Get-Item $zip).Length / 1MB, 2)
+    $homeZip = & (Join-Path $PSScriptRoot 'package-home-awake.ps1')
     Write-Host ""
-    Write-Host "[build] SUCCESS: $zip ($sizeMB MB)" -ForegroundColor Green
+    Write-Host "[build] SUCCESS: $zip ($sizeMB MB) e $homeZip" -ForegroundColor Green
 } finally {
     Pop-Location
 }

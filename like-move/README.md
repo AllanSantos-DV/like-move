@@ -79,7 +79,7 @@ pythonw main.pyw
 python main.pyw
 ```
 
-**Requisitos**: Windows 7/8/10/11 · Python 3.8+
+**Requisitos**: Windows 10 ou 11 · Python 3.9+ (só para rodar do código; o `.exe` da release não precisa de Python)
 
 ---
 
@@ -230,6 +230,8 @@ pip install -r requirements.txt pyinstaller
 # Com o bootloader do PyInstaller compilado localmente (exige Visual Studio Build Tools)
 .\build.ps1 -CompileBootloader
 ```
+
+O build também gera `dist\home-awake.zip` (só os scripts e o LEIA-ME), pelo mesmo `package-home-awake.ps1` que a CI usa.
 
 O build sai em pasta (`onedir`), sem UPX e com metadados de versão no `.exe`: o modo arquivo único extrai tudo para `%TEMP%` e o UPX comprime os binários, duas heurísticas clássicas de antivírus.
 
