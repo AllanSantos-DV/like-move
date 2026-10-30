@@ -1,4 +1,4 @@
-<#
+﻿<#
 Home Awake — mantém a tela sem bloquear SOMENTE na rede Wi-Fi de casa cadastrada.
 
 Mecanismo: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED).

@@ -1,4 +1,4 @@
-# Pester 3.4 (vem com o Windows): powershell -NoProfile -Command "Invoke-Pester .\tests\HomeAwake.Tests.ps1"
+﻿# Pester 3.4 (vem com o Windows): powershell -NoProfile -Command "Invoke-Pester .\tests\HomeAwake.Tests.ps1"
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) 'HomeAwake.psm1') -Force
 
 $home_ = [pscustomobject]@{ Ssid = 'Casa'; AuthAlgorithm = 7; GatewayMac = 'aa:bb:cc:00:00:01'; Bssids = @('11:22:33:44:55:66', '11:22:33:44:55:67') }
