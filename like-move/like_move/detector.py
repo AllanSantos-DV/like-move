@@ -57,6 +57,15 @@ user32.CloseDesktop.restype = ctypes.wintypes.BOOL
 # ---------------------------------------------------------------------------
 # Funções públicas
 # ---------------------------------------------------------------------------
+def idle_ms_since(last_input_tick: int, current_tick: int) -> int:
+    """Milissegundos entre o último input e agora, com os dois ticks em 32 bits.
+
+    GetLastInputInfo devolve o tick no formato de GetTickCount (DWORD), que volta a zero a cada
+    ~49,7 dias de uptime. A subtração módulo 2**32 dá o intervalo certo antes e depois da volta.
+    """
+    return (current_tick - last_input_tick) & 0xFFFFFFFF
+
+
 def get_idle_time_ms() -> int:
     """Retorna o tempo de inatividade em milissegundos.
 
@@ -68,17 +77,7 @@ def get_idle_time_ms() -> int:
         logger.warning("GetLastInputInfo falhou")
         return 0
 
-    current_tick: int = kernel32.GetTickCount64()
-
-    # dwTime é DWORD (32-bit), current_tick é 64-bit.
-    # Mascarar current_tick para 32 bits para subtração correta
-    # quando dwTime ainda não sofreu overflow.
-    idle_ms = (current_tick & 0xFFFFFFFF) - lii.dwTime
-    if idle_ms < 0:
-        # Overflow do DWORD — tratar como idle zero
-        idle_ms = 0
-
-    return idle_ms
+    return idle_ms_since(lii.dwTime, kernel32.GetTickCount64())
 
 
 def is_screen_locked() -> bool:

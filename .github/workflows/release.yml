@@ -36,6 +36,17 @@ jobs:
         working-directory: like-move
         run: python -m unittest discover -s tests -v
 
+      # Pester 3.4 é o que vem com o Windows PowerShell 5.1; o runner traz um Pester mais novo ao lado,
+      # com sintaxe incompatível com estes testes.
+      - name: Home Awake tests (Pester 3.4)
+        working-directory: like-move/home-awake
+        shell: powershell
+        run: |
+          Import-Module Pester -RequiredVersion 3.4.0 -Force
+          $r = Invoke-Pester -Path .\tests\HomeAwake.Tests.ps1 -PassThru
+          Write-Host "Pester: passed=$($r.PassedCount) failed=$($r.FailedCount)"
+          if ($r.FailedCount -gt 0 -or $r.PassedCount -eq 0) { exit 1 }
+
       - name: Build (onedir, no UPX)
         working-directory: like-move
         run: python -m PyInstaller like-move.spec --noconfirm
@@ -45,7 +56,8 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path dist/like-move -DestinationPath dist/like-move-win64.zip
-          Compress-Archive -Path home-awake/* -DestinationPath dist/home-awake.zip
+          # Sem a pasta tests/: o real-run.ps1 inicia e para processos e não serve ao usuário final.
+          Get-ChildItem home-awake -Exclude tests | Compress-Archive -DestinationPath dist/home-awake.zip
 
       # Sai como rascunho: só é publicada depois de baixada e verificada pelo antivírus.
       - name: Create draft GitHub Release

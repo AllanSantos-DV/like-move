@@ -184,7 +184,7 @@ O like-move usa exclusivamente APIs Win32 via `ctypes` — sem `pywin32`, sem de
 | Componente | API Win32 | Descrição |
 |-----------|-----------|-----------|
 | Detecção de idle | `GetLastInputInfo` + `GetTickCount64` | Calcula tempo desde último input real |
-| Detecção de tela bloqueada | `OpenInputDesktopW` | Retorna `NULL` quando a tela está no Secure Desktop |
+| Detecção de tela bloqueada | `OpenInputDesktop` | Retorna `NULL` quando a tela está no Secure Desktop |
 | Manter acordado | `SetThreadExecutionState` | `ES_CONTINUOUS \| ES_SYSTEM_REQUIRED \| ES_DISPLAY_REQUIRED`; o Windows descarta o pedido quando o app fecha |
 | Detecção de KVM | `WM_DEVICECHANGE` + hidden window | Event-driven: janela oculta recebe broadcasts de mudança de dispositivo |
 | Contagem de dispositivos | `GetSystemMetrics`, `GetRawInputDeviceList` | Monitores, mouses e teclados conectados |
@@ -239,9 +239,15 @@ O build sai em pasta (`onedir`), sem UPX e com metadados de versão no `.exe`: o
 python -m unittest discover -s tests -v
 ```
 
+Home Awake (Pester 3.4, que vem com o Windows):
+
+```powershell
+powershell -NoProfile -Command "Invoke-Pester .\home-awake\tests\HomeAwake.Tests.ps1"
+```
+
 ### CI/CD
 
-O workflow de release roda ao criar uma tag `v*` na `master`: compila o bootloader do PyInstaller no runner, roda os testes, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
+O workflow de release roda ao criar uma tag `v*` na `master`: compila o bootloader do PyInstaller no runner, roda os testes do Python e do Home Awake, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
 
 ### Regenerar ícone
 
@@ -279,4 +285,4 @@ Há também uma página de vitrine estática em [`site/index.html`](site/index.h
 ## 🏠 Home Awake (`home-awake/`)
 
 Tela sem bloquear **só no Wi-Fi de casa cadastrado**, sem simular entrada, sem executável e sem alterar configurações: PowerShell legível + `SetThreadExecutionState`.
-Veja `home-awake/LEIA-ME.txt`, `docs/sdd/home-awake.md` e `docs/adr/`.
+Veja `home-awake/LEIA-ME.txt`: passo a passo, o que cada resultado da autoverificação significa e os limites.
