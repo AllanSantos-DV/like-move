@@ -242,12 +242,12 @@ python -m unittest discover -s tests -v
 Home Awake (Pester 3.4, que vem com o Windows):
 
 ```powershell
-powershell -NoProfile -Command "Invoke-Pester .\home-awake\tests\HomeAwake.Tests.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -RequiredVersion 3.4.0; Invoke-Pester .\home-awake\tests\HomeAwake.Tests.ps1"
 ```
 
 ### CI/CD
 
-O workflow de release roda ao criar uma tag `v*` na `master`: compila o bootloader do PyInstaller no runner, roda os testes do Python e do Home Awake, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
+O workflow `Tests` roda os testes do Python e do Home Awake a cada push na `develop`/`master` e em pull request. O workflow de release roda ao enviar uma tag `v*` (criada na `master`): compila o bootloader do PyInstaller no runner, roda os testes do Python e do Home Awake, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
 
 ### Regenerar ícone
 
