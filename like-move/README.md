@@ -249,7 +249,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -Re
 
 ### CI/CD
 
-O workflow `Tests` roda os testes do Python (3.9, o mínimo, e 3.12) e do Home Awake a cada push na `develop`/`master` e em pull request. O workflow de release roda ao enviar uma tag `v*` (criada na `master`): chama o workflow `Tests` e só segue se ele passar, confere que a tag bate com o `VERSION`, compila o bootloader do PyInstaller no runner, roda os testes do Python e do Home Awake, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
+O workflow `Tests` roda os testes do Python (3.9, o mínimo, e 3.12) e do Home Awake a cada push na `develop`/`master` e em pull request. O workflow de release roda ao enviar uma tag `v*` (criada na `master`): chama o workflow `Tests` e só segue se ele passar, confere que o commit da tag está na `master` e que a tag bate com o `VERSION`, compila o bootloader do PyInstaller no runner, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
 
 ### Regenerar ícone
 
