@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import {
-  APP_ASSET, HOME_AWAKE_ASSET, installApp, installHomeAwake, loadRelease, parseArgs,
+  APP_ASSET, HOME_AWAKE_ASSET, installApp, installHomeAwake, loadRelease, parseArgs, runHomeAwakeDiagnosis,
 } from "../lib/install.mjs";
 
 const TMP = mkdtempSync(join(tmpdir(), "like-move-npm-test-"));
@@ -111,6 +111,21 @@ test("Home Awake: troca os scripts e mantém o cadastro.txt", async () => {
   assert.equal(readFileSync(join(dir, "cadastro.txt"), "utf8"), "minha rede");
   assert.ok(existsSync(join(dir, "1-diagnosticar.cmd")));
   assert.deepEqual(leftovers(base), []);
+});
+
+test("diagnóstico do Home Awake roda mesmo com NoDefaultCurrentDirectoryInExePath definido", () => {
+  const dir = join(TMP, "diag");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "1-diagnosticar.cmd"), "@echo off\r\necho ok> rodou.txt\r\n");
+  const before = process.env.NoDefaultCurrentDirectoryInExePath;
+  process.env.NoDefaultCurrentDirectoryInExePath = "1";
+  try {
+    runHomeAwakeDiagnosis(dir);
+  } finally {
+    if (before === undefined) delete process.env.NoDefaultCurrentDirectoryInExePath;
+    else process.env.NoDefaultCurrentDirectoryInExePath = before;
+  }
+  assert.ok(existsSync(join(dir, "rodou.txt")));
 });
 
 test("release.json: ausente ou com hash inválida falha alto", () => {
