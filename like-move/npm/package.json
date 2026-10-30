@@ -1,0 +1,44 @@
+{
+  "name": "like-move",
+  "version": "1.3.4",
+  "description": "Instala e abre o like-move (tela do Windows sem bloquear, só quando você quer) com um comando: baixa a release do GitHub, confere o sha256 e roda sem administrador. Também instala o Home Awake.",
+  "type": "module",
+  "bin": {
+    "like-move": "bin/like-move.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "release.json",
+    "README.md"
+  ],
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "release-hashes": "node scripts/release-hashes.mjs",
+    "prepublishOnly": "node scripts/check-package.mjs",
+    "test": "node --test"
+  },
+  "keywords": [
+    "windows",
+    "screen-lock",
+    "keep-awake",
+    "kvm",
+    "tray"
+  ],
+  "author": {
+    "name": "Allan Santos",
+    "url": "https://github.com/AllanSantos-DV"
+  },
+  "homepage": "https://allansantos-dv.github.io/like-move/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AllanSantos-DV/like-move.git",
+    "directory": "like-move/npm"
+  },
+  "license": "MIT"
+}
