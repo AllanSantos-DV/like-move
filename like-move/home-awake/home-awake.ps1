@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Home Awake: a tela não bloqueia por inatividade SOMENTE na rede Wi-Fi de casa cadastrada.
 .DESCRIPTION

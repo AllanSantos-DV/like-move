@@ -1,4 +1,4 @@
-<#
+﻿<#
 Prova real, sem administrador, nesta máquina:
   A) fail-closed: o -Executar de verdade, sem a rede de casa, NÃO segura a tela (bit DISPLAY apagado),
      e o -Parar encerra o processo.
