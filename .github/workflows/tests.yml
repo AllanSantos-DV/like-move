@@ -10,7 +10,13 @@ permissions:
 
 jobs:
   tests:
+    name: tests (Python ${{ matrix.python-version }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 é o mínimo declarado no README; 3.12 é a versão do build da release.
+        python-version: ["3.9", "3.12"]
 
     steps:
       - name: Checkout
@@ -19,7 +25,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: like-move/requirements.txt
 
@@ -31,8 +37,9 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       # Pester 3.4 é o que vem com o Windows PowerShell 5.1; o runner traz um Pester mais novo ao lado,
-      # com sintaxe incompatível com estes testes.
+      # com sintaxe incompatível com estes testes. Não depende do Python: roda uma vez.
       - name: Home Awake tests (Pester 3.4)
+        if: matrix.python-version == '3.12'
         working-directory: like-move/home-awake
         shell: powershell
         run: |

@@ -3,3 +3,7 @@ docs/
 
 .token-guard/
 .mcp-memory/
+
+# Metadados do gerador de voz/video: ficam no disco, nao vao para o git nem para o Pages
+like-move/site/**/*.voz.json
+like-move/site/**/*.medicao.json
