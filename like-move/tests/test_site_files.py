@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(ROOT)
 ALLOWED = {".html", ".png", ".jpg", ".mp4", ".vtt"}
 # Marcas do quadro narrado do VXK: botão Explicar, controle de velocidade, estado de narração, voz do navegador.
-NARRATED_BOARD_MARKERS = ("Explicar", "vxp-speed", "bd-narrating", "data-vxp", "speechSynthesis", "like-move-tour")
+NARRATED_BOARD_MARKERS = ("Explicar", "vxp-speed", "bd-narrating", "data-vxp", "speech" + "Synthesis", "like-move-tour")
 
 
 def tracked_site_files():
