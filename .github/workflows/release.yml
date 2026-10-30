@@ -9,12 +9,27 @@ permissions:
   contents: write
 
 jobs:
+  # Mesmos testes do workflow Tests (Python 3.9 e 3.12, Pester): a release só é construída se passarem.
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   build-release:
+    needs: tests
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # O app compara a tag da release com o VERSION embutido no exe: tag diferente de VERSION
+      # entregaria um exe que se oferece para atualizar para si mesmo.
+      - name: Tag matches VERSION
+        shell: pwsh
+        run: |
+          $version = (Get-Content like-move/VERSION -Raw).Trim()
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "A tag $env:GITHUB_REF_NAME não bate com like-move/VERSION (v$version)."
+          }
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -32,21 +47,6 @@ jobs:
           pip install -r like-move/requirements.txt
           pip install --no-binary pyinstaller pyinstaller
 
-      - name: Unit tests
-        working-directory: like-move
-        run: python -m unittest discover -s tests -v
-
-      # Pester 3.4 é o que vem com o Windows PowerShell 5.1; o runner traz um Pester mais novo ao lado,
-      # com sintaxe incompatível com estes testes.
-      - name: Home Awake tests (Pester 3.4)
-        working-directory: like-move/home-awake
-        shell: powershell
-        run: |
-          Import-Module Pester -RequiredVersion 3.4.0 -Force
-          $r = Invoke-Pester -Path .\tests\HomeAwake.Tests.ps1 -PassThru
-          Write-Host "Pester: passed=$($r.PassedCount) failed=$($r.FailedCount)"
-          if ($r.FailedCount -gt 0 -or $r.PassedCount -eq 0) { exit 1 }
-
       - name: Build (onedir, no UPX)
         working-directory: like-move
         run: python -m PyInstaller like-move.spec --noconfirm
@@ -55,6 +55,7 @@ jobs:
         working-directory: like-move
         shell: pwsh
         run: |
+          if (-not (Test-Path dist/like-move/like-move.exe)) { throw 'dist/like-move/like-move.exe não foi gerado' }
           Compress-Archive -Path dist/like-move -DestinationPath dist/like-move-win64.zip
           # Mesmo script do build.ps1: só os scripts e o LEIA-ME entram no zip.
           .\package-home-awake.ps1
