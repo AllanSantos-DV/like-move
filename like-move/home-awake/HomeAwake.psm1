@@ -4,7 +4,7 @@ Home Awake — mantém a tela sem bloquear SOMENTE na rede Wi-Fi de casa cadastr
 Mecanismo: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED).
 Não simula mouse/teclado, não usa rede, não altera configuração de bloqueio: o pedido
 pertence ao processo e o Windows o descarta quando o processo termina, então não há
-nada a "restaurar" (ver docs/adr/0002).
+nada a "restaurar".
 #>
 Set-StrictMode -Version Latest
 
@@ -341,7 +341,7 @@ function Write-HomeAwakeLog([string]$Message) {
 # Autoverificação: prova, na própria máquina e sem administrador, que o pedido evita o bloqueio
 # ---------------------------------------------------------------------------
 # A doc de SetThreadExecutionState diz que ele não impede a proteção de tela; o teste do wakepy diz que
-# impede (docs/research/home-awake-lock-prevention-research.md). Só a máquina real responde, então enquanto
+# impede (wakepy #169). Só a máquina real responde, então enquanto
 # está na rede de casa o programa mede a ociosidade e anota o que aconteceu em autoverificacao.txt.
 $script:SelfCheckPath = Join-Path $script:DataDir 'autoverificacao.txt'
 $script:SelfCheckMarginSeconds = 10    # ociosidade acima do limite para valer como prova (jitter entre amostras)

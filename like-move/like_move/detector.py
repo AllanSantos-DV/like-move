@@ -83,7 +83,7 @@ def get_idle_time_ms() -> int:
 def is_screen_locked() -> bool:
     """Verifica se a tela está bloqueada (Secure Desktop ativo).
 
-    Usa OpenInputDesktopW — retorna NULL quando a tela está bloqueada
+    Usa OpenInputDesktop — retorna NULL quando a tela está bloqueada
     (Winlogon/Secure Desktop). Quando retorna um handle válido,
     fecha-o com CloseDesktop para evitar leak.
     """

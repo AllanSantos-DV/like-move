@@ -57,7 +57,7 @@ jobs:
         run: |
           Compress-Archive -Path dist/like-move -DestinationPath dist/like-move-win64.zip
           # Sem a pasta tests/: o real-run.ps1 inicia e para processos e não serve ao usuário final.
-          Get-ChildItem home-awake -Exclude tests | Compress-Archive -DestinationPath dist/home-awake.zip
+          Get-ChildItem home-awake -Exclude tests, .gitignore | Compress-Archive -DestinationPath dist/home-awake.zip
 
       # Sai como rascunho: só é publicada depois de baixada e verificada pelo antivírus.
       - name: Create draft GitHub Release

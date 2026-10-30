@@ -6,9 +6,11 @@ python -m unittest discover -s tests -v   (a partir de like-move/)
 import os
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from like_move import detector  # noqa: E402
 from like_move.detector import idle_ms_since  # noqa: E402
 
 DWORD = 2**32
@@ -35,6 +37,24 @@ class IdleMsSince(unittest.TestCase):
     def test_uptime_de_meses_sem_input_ha_dois_minutos(self):
         now = 200 * 24 * 3600 * 1000
         self.assertEqual(idle_ms_since((now - 120_000) % DWORD, now), 120_000)
+
+
+class GetIdleTimeMs(unittest.TestCase):
+    def _idle(self, last_input_tick, current_tick):
+        def fill(byref_arg):
+            byref_arg._obj.dwTime = last_input_tick
+            return 1
+
+        with mock.patch.object(detector.user32, "GetLastInputInfo", side_effect=fill), \
+                mock.patch.object(detector.kernel32, "GetTickCount64", return_value=current_tick):
+            return detector.get_idle_time_ms()
+
+    def test_usa_os_dois_ticks_com_a_volta_do_dword(self):
+        self.assertEqual(self._idle(DWORD - 10_000, DWORD + 30_000), 40_000)
+
+    def test_falha_de_leitura_conta_como_sem_inatividade(self):
+        with mock.patch.object(detector.user32, "GetLastInputInfo", return_value=0):
+            self.assertEqual(detector.get_idle_time_ms(), 0)
 
 
 if __name__ == "__main__":
