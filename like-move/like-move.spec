@@ -81,7 +81,7 @@ version_info = VSVersionInfo(
     ffi=FixedFileInfo(filevers=_nums, prodvers=_nums),
     kids=[
         StringFileInfo([StringTable('041604B0', [
-            StringStruct('CompanyName', 'Allan Santos'),
+            StringStruct('CompanyName', 'like-move'),
             StringStruct('FileDescription', 'like-move - mantém o Windows sem bloquear'),
             StringStruct('FileVersion', _ver),
             StringStruct('InternalName', 'like-move'),

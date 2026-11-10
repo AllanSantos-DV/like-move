@@ -298,7 +298,7 @@ Há também uma página de vitrine estática em [`site/index.html`](site/index.h
 
 ## 📄 Licença
 
-[MIT](../LICENSE) © Allan Santos
+[MIT](../LICENSE) © like-move contributors
 
 ---
 
