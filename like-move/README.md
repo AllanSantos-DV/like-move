@@ -263,9 +263,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -Re
 
 ### CI/CD
 
-O workflow `Tests` roda os testes do Python (3.9, o mínimo, e 3.12) e do Home Awake a cada push na `develop`/`master` e em pull request. O workflow de release roda ao enviar uma tag `v*` (criada na `master`): chama o workflow `Tests` e só segue se ele passar, confere que o commit da tag está na `master` e que a tag bate com o `VERSION`, compila o bootloader do PyInstaller no runner, gera `like-move-win64.zip` e `home-awake.zip` e cria a release como **rascunho**. Ela só é publicada depois de baixada e verificada pelo antivírus.
+O GitHub Actions não roda suíte de teste nem runner Windows/macOS: os testes e a verificação rodam localmente antes de cada publicação (`python -m unittest discover -s tests -v` em `like-move/`, Pester do Home Awake e `cd npm && npm test`). Só ficam dois workflows leves, em `ubuntu-latest`: `Deploy Pages` e `Publish npm`. `tests/test_workflows_guard.py` falha se um workflow usar `windows-*`/`macos-*` em `runs-on` ou tiver passo de teste.
 
-Publicar a release dispara o workflow `Publish npm`: confere que a tag bate com o `VERSION` e com o `npm/package.json` e que o commit está na `master`, baixa os dois zips e grava o sha256 deles em `npm/release.json` (cada hash tem de bater com o digest que o GitHub publica), roda os testes do pacote e publica `like-move` no npm por publicação confiável (OIDC), com proveniência. Ao subir o `VERSION`, suba junto a `version` de `npm/package.json` (o workflow `Tests` falha se divergirem). Testes do pacote: `cd npm && npm test`.
+A release é construída localmente, porque o `.exe` do PyInstaller só se gera no Windows: na `master`, com o commit já fast-forwarded e a suíte verde, rode `.\build.ps1 -CompileBootloader` (gera `like-move-win64.zip` e `home-awake.zip`), crie a tag `v<VERSION>` e a release como **rascunho** com os dois zips (`gh release create v<VERSION> --draft ...`). Ela só é publicada depois de baixada e verificada pelo antivírus.
+
+Publicar a release dispara o workflow `Publish npm`: confere que a tag bate com o `VERSION` e com o `npm/package.json` e que o commit está na `master`, baixa os dois zips e grava o sha256 deles em `npm/release.json` (cada hash tem de bater com o digest que o GitHub publica) e publica `like-move` no npm por publicação confiável (OIDC), com proveniência. Ao subir o `VERSION`, suba junto a `version` de `npm/package.json`.
 
 ### Regenerar ícone
 

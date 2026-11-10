@@ -27,8 +27,8 @@ concurrency:
 
 jobs:
   publish:
-    # Os testes do pacote usam o tar.exe do Windows; runner hospedado pelo GitHub (a proveniência exige).
-    runs-on: windows-latest
+    # Runner hospedado pelo GitHub, Linux (a proveniência exige hospedado). Testes rodam só na verificação local.
+    runs-on: ubuntu-latest
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
     defaults:
@@ -65,9 +65,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/release-hashes.mjs
-
-      - name: Testes do pacote
-        run: npm test
 
       - name: Publicar com proveniência
         run: npm publish --access public --provenance
