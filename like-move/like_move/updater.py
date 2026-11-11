@@ -3,8 +3,9 @@
 Fluxo:
     GET https://api.github.com/repos/<owner>/<repo>/releases/latest
     → compara ``tag_name`` (ex.: "v1.2.0") com a versão local (VERSION)
-    → se houver versão maior, baixa o asset ``like-move-win64.zip``, extrai numa
-      pasta irmã ``like-move-<versão>`` e abre o novo ``like-move.exe``.
+    → se houver versão maior, baixa o asset ``like-move-win64.zip``, confere o sha256
+      com o ``digest`` que o GitHub publica para o asset, extrai numa pasta irmã
+      ``like-move-<versão>`` e abre o novo ``like-move.exe``.
 
 O app atual só encerra; nenhum script auxiliar troca arquivos em uso. A nova
 versão, ao abrir, remove da pasta antiga apenas ``like-move.exe`` e ``_internal``
@@ -15,6 +16,7 @@ desenvolvimento (Python), apenas informa e abre a página de releases.
 Usa somente a stdlib (``urllib``/``zipfile``).
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -49,7 +51,7 @@ class UpdateInfo(NamedTuple):
     version: str            # ex.: "1.2.0"
     tag: str                # ex.: "v1.2.0"
     download_url: str       # URL do asset .zip
-    size: int               # tamanho esperado em bytes (0 se desconhecido)
+    sha256: str             # digest publicado pelo GitHub para o asset ("" se ausente)
     notes: str              # release notes
     html_url: str           # página da release
 
@@ -109,6 +111,22 @@ def _pick_asset(assets: list) -> Optional[dict]:
     return None
 
 
+def published_sha256(asset: Optional[dict]) -> str:
+    """Hash do campo ``digest`` ("sha256:<hex>") que o GitHub publica para o asset; "" se ausente ou malformado."""
+    digest = str((asset or {}).get("digest") or "").lower()
+    value = digest[len("sha256:"):] if digest.startswith("sha256:") else ""
+    return value if len(value) == 64 and all(c in "0123456789abcdef" for c in value) else ""
+
+
+def file_sha256(path: str) -> str:
+    """sha256 do arquivo em hexadecimal minúsculo."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(64 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def check_for_update() -> Optional[UpdateInfo]:
     """Verifica se há versão mais nova publicada. None se não houver/erro."""
     data = _fetch_latest()
@@ -122,14 +140,13 @@ def check_for_update() -> Optional[UpdateInfo]:
 
     asset = _pick_asset(data.get("assets") or [])
     download_url = asset.get("browser_download_url", "") if asset else ""
-    size = int(asset.get("size", 0)) if asset else 0
 
     logger.info("Atualização disponível: %s (local=%s)", tag, __version__)
     return UpdateInfo(
         version=tag.lstrip("vV"),
         tag=tag,
         download_url=download_url,
-        size=size,
+        sha256=published_sha256(asset),
         notes=str(data.get("body") or ""),
         html_url=str(data.get("html_url") or _RELEASES_PAGE),
     )
@@ -187,14 +204,17 @@ def download_and_stage(update: UpdateInfo) -> Optional[str]:
     if not update.download_url:
         logger.warning("Release sem o asset %s", ASSET_NAME)
         return None
+    if not update.sha256:
+        logger.warning("Release %s sem digest sha256 publicado para %s: atualização recusada", update.tag, ASSET_NAME)
+        return None
 
     with tempfile.TemporaryDirectory(prefix="like-move-dl-") as tmp:
         zip_path = os.path.join(tmp, ASSET_NAME)
         if not _download(update.download_url, zip_path):
             return None
-        actual = os.path.getsize(zip_path)
-        if actual <= 0 or (update.size and actual != update.size):
-            logger.warning("Download inválido (esperado=%d, obtido=%d)", update.size, actual)
+        actual = file_sha256(zip_path)
+        if actual != update.sha256:
+            logger.warning("Download recusado: sha256 %s, o GitHub publica %s", actual, update.sha256)
             return None
         try:
             return stage_update(zip_path, os.path.dirname(sys.executable), update.version)

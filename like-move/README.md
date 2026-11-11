@@ -173,7 +173,7 @@ O like-move verifica se há uma versão mais nova nas [releases do GitHub](../..
 
 - **Verificar ao iniciar** (padrão: ligado) — checa em segundo plano ao abrir e avisa se houver novidade.
 - **Verificar atualizações** — checagem manual pelo menu.
-- Quando há atualização, surge **Atualizar para vX.Y.Z**: o like-move baixa `like-move-win64.zip`, extrai numa pasta ao lado (`like-move-X.Y.Z`) e abre a nova versão, que remove da pasta antiga só `like-move.exe` e `_internal` e reaponta "Iniciar com Windows". Nenhum script auxiliar troca arquivos em uso.
+- Quando há atualização, surge **Atualizar para vX.Y.Z**: o like-move baixa `like-move-win64.zip`, confere o sha256 com o `digest` que o GitHub publica para o asset (sem digest ou divergente, a atualização é recusada), extrai numa pasta ao lado (`like-move-X.Y.Z`) e abre a nova versão, que remove da pasta antiga só `like-move.exe` e `_internal` e reaponta "Iniciar com Windows". Nenhum script auxiliar troca arquivos em uso.
 - Usa apenas a API pública de releases do GitHub e a stdlib (`urllib`) — sem servidores nem dependências extras.
 
 ---

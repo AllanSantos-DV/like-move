@@ -3,6 +3,7 @@
 python -m unittest discover -s tests -v   (a partir de like-move/)
 """
 
+import hashlib
 import os
 import sys
 import tempfile
@@ -143,6 +144,51 @@ class StageUpdateTest(unittest.TestCase):
         updater.stage_update(z, self.install, "1.2.0")
         for _, _, files in os.walk(self.root):
             self.assertFalse([f for f in files if f.endswith((".bat", ".cmd"))])
+
+
+class DigestCheckTest(unittest.TestCase):
+    """O download só é preparado se o sha256 bater com o digest que o GitHub publica."""
+
+    ZIP = b"zip da release"
+    SHA = hashlib.sha256(ZIP).hexdigest()
+
+    def info(self, sha256):
+        return updater.UpdateInfo(version="9.9.9", tag="v9.9.9", download_url="u", sha256=sha256, notes="", html_url="h")
+
+    def fake_download(self, url, dest):
+        with open(dest, "wb") as f:
+            f.write(self.ZIP)
+        return True
+
+    def run_stage(self, sha256):
+        with mock.patch.object(updater, "is_frozen", return_value=True), \
+                mock.patch.object(updater, "_download", side_effect=self.fake_download), \
+                mock.patch.object(updater, "stage_update", return_value="novo.exe") as stage:
+            return updater.download_and_stage(self.info(sha256)), stage
+
+    def test_digest_que_bate_prepara_a_atualizacao(self):
+        result, stage = self.run_stage(self.SHA)
+        self.assertEqual(result, "novo.exe")
+        stage.assert_called_once()
+
+    def test_digest_divergente_recusa_sem_extrair(self):
+        result, stage = self.run_stage("0" * 64)
+        self.assertIsNone(result)
+        stage.assert_not_called()
+
+    def test_release_sem_digest_recusa_sem_baixar(self):
+        with mock.patch.object(updater, "is_frozen", return_value=True), \
+                mock.patch.object(updater, "_download") as download:
+            self.assertIsNone(updater.download_and_stage(self.info("")))
+        download.assert_not_called()
+
+    def test_le_o_digest_sha256_do_asset(self):
+        self.assertEqual(updater.published_sha256({"digest": "sha256:" + self.SHA}), self.SHA)
+
+    def test_digest_ausente_ou_de_outro_algoritmo_vira_vazio(self):
+        self.assertEqual(updater.published_sha256({}), "")
+        self.assertEqual(updater.published_sha256({"digest": "sha512:" + self.SHA}), "")
+        self.assertEqual(updater.published_sha256({"digest": "sha256:xyz"}), "")
 
 
 class CleanupPreviousTest(unittest.TestCase):
