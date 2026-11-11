@@ -53,13 +53,13 @@ jobs:
           npm install -g npm@11
           node -e "const [a,b,c]=process.argv[1].split('.').map(Number);if(a<11||(a===11&&(b<5||(b===5&&c<1)))){console.error('npm '+process.argv[1]+' < 11.5.1');process.exit(1)}" "$(npm --version)"
 
-      - name: Tag = VERSION = package.json, commit na master
+      - name: Tag = VERSION = package.json, commit na main
         run: |
           v="$(tr -d '\r\n' < ../VERSION)"
           test "$TAG" = "v$v" || { echo "tag $TAG não corresponde a like-move/VERSION ($v)"; exit 1; }
           test "$(node -p "require('./package.json').version")" = "$v" || { echo "package.json fora da versão $v"; exit 1; }
-          git fetch origin master
-          git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/master || { echo "o commit da tag não está na master"; exit 1; }
+          git fetch origin main
+          git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main || { echo "o commit da tag não está na main"; exit 1; }
 
       - name: sha256 dos zips da release (conferidos com o digest do GitHub)
         env:

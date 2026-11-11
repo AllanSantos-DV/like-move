@@ -1,42 +1,40 @@
+# Publica like-move/site (estático, sem build) na branch gh-pages quando ele muda na main. Fonte do Pages = "Deploy
+# from a branch", gh-pages, "/": sem artefato do Actions. O push usa a chave de deploy PAGES_DEPLOY_KEY (push com
+# GITHUB_TOKEN não dispara a publicação) e o job falha se a página no ar não for a publicada, com o carimbo
+# like-move-version "<VERSION> <commit>". Reverter: README, seção CI/CD.
+
 name: Deploy Pages
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - "like-move/site/**"
+      - "like-move/pages.py"
+      - "like-move/github_known_hosts"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  publish:
+    # workflow_dispatch aceita qualquer ref; a gh-pages só recebe o site da main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Prepare site
-        run: |
-          mkdir -p _site
-          cp -r like-move/site/. _site/
+      - name: Publicar like-move/site na gh-pages
+        env:
+          PAGES_DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+        run: python3 like-move/pages.py publish --commit "$GITHUB_SHA"
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: A página no ar é a publicada (verify)
+        run: python3 like-move/pages.py verify --commit "$GITHUB_SHA"
