@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta name="like-move-version" content="1.3.6 d0f9e1b" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>like-move — a tela não bloqueia, só quando você quer</title>
+<meta name="description" content="like-move mantém o Windows sem bloquear por inatividade, só quando você quer e só nas redes Wi-Fi em que você confia. Sem simular mouse ou teclado, sem instalação, sem administrador." />
+<link rel="icon" href="assets/icon-128.png" />
+<style>
+  :root {
+    --bg: #0e1512; --panel: #16241e; --panel-2: #1b2c24; --line: #2a3d33;
+    --green: #2ecc71; --green-ink: #0b3d22; --text: #e8f1ec; --muted: #a9bdb3;
+    --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; line-height: 1.6; }
+  a { color: var(--green); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  .nav { position: sticky; top: 0; z-index: 10; background: rgba(14,21,18,.94); border-bottom: 1px solid var(--line); }
+  .nav .wrap { display: flex; align-items: center; gap: 20px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); text-decoration: none; font-size: 18px; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  .nav nav { display: flex; gap: 18px; margin-left: auto; }
+  .nav nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  .nav nav a:hover, .nav nav a:focus-visible { color: var(--text); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; font-weight: 600; text-decoration: none; font-size: 15px; border: 1px solid var(--line); color: var(--text); background: var(--panel); }
+  .btn.primary { background: var(--green); color: var(--green-ink); border-color: var(--green); }
+  .btn:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+
+  header.hero { padding: 48px 0 20px; text-align: center; }
+  header.hero h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.15; margin: 0 0 12px; }
+  header.hero p { color: var(--muted); font-size: 18px; margin: 0 auto 22px; max-width: 640px; }
+  .paths { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .install { display: inline-flex; align-items: center; gap: 10px; margin: 0 auto 18px; padding: 8px 8px 8px 18px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--green); }
+  .install code { background: none; padding: 0; font-size: 18px; font-family: Consolas, "Cascadia Mono", monospace; color: var(--text); }
+  .install button { font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 14px; border-radius: 999px; border: 0; background: var(--green); color: var(--green-ink); }
+  .install button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  .install-note { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
+
+  .video { margin: 28px auto 8px; max-width: 960px; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .video video { display: block; width: 100%; height: auto; }
+  .video-note { text-align: center; color: var(--muted); font-size: 14px; margin: 0 0 40px; }
+
+  section { padding: 44px 0; border-top: 1px solid var(--line); }
+  section h2 { font-size: 28px; margin: 0 0 8px; }
+  section .lead { color: var(--muted); margin: 0 0 24px; max-width: 720px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .stats { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); text-align: center; }
+  .stat b { display: block; font-size: 44px; color: var(--green); line-height: 1.1; }
+  .stat span { color: var(--muted); }
+  ol.steps { margin: 0; padding-left: 22px; }
+  ol.steps li { margin: 0 0 10px; }
+  .shots { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .shots figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+  .shots img { display: block; max-width: 100%; height: auto; }
+  .shots figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+  @media (max-width: 720px) { .nav nav { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon-128.png" alt="" />like-move</a>
+    <nav aria-label="Seções">
+      <a href="#para-quem">Para quem</a>
+      <a href="#recursos">O que faz</a>
+      <a href="#seguranca">Segurança</a>
+      <a href="#como-usar">Como usar</a>
+    </nav>
+  </div>
+</div>
+
+<main class="wrap" id="top">
+  <header class="hero">
+    <h1>A tela não bloqueia no meio da conversa</h1>
+    <p>O like-move mantém o Windows sem bloquear por inatividade, só quando você quer e só nas redes em que você confia.</p>
+    <div class="install" aria-label="Comando de instalação">
+      <code id="cmd">npx like-move</code>
+      <button type="button" data-copy="npx like-move">Copiar</button>
+    </div>
+    <p class="install-note">No terminal, com Node.js 20 ou mais novo. Instala e abre sem administrador, conferindo o sha256 do download.</p>
+    <div class="paths">
+      <a class="btn" href="#video">▶ Assistir ao vídeo</a>
+      <a class="btn" href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/like-move-win64.zip">⬇ Sem Node: baixar o zip</a>
+      <a class="btn" href="#recursos">Ver o que faz</a>
+    </div>
+  </header>
+
+  <div class="video" id="video">
+    <video controls preload="metadata" poster="assets/video/like-move-apresentacao.poster.jpg">
+      <source src="assets/video/like-move-apresentacao.web.mp4" type="video/mp4" />
+      <track kind="captions" src="assets/video/like-move-apresentacao.vtt" srclang="pt-BR" label="Português" default />
+    </video>
+  </div>
+  <p class="video-note">Vídeo de apresentação com narração e legenda.</p>
+
+  <section id="para-quem">
+    <h2>Para quem é</h2>
+    <p class="lead">Para quem fica um tempo sem tocar no computador e não quer a tela bloqueando.</p>
+    <div class="grid">
+      <div class="card"><h3>Reuniões por voz</h3><p>Você fala e ouve, mas não mexe no computador.</p></div>
+      <div class="card"><h3>Quem usa KVM</h3><p>O teclado e o mouse foram para outro PC e este fica parado.</p></div>
+      <div class="card"><h3>Leitura e acompanhamento</h3><p>Um painel, um documento longo, um processo rodando.</p></div>
+    </div>
+  </section>
+
+  <section id="recursos">
+    <h2>Você escolhe quando</h2>
+    <p class="lead">Tudo fica no ícone da bandeja do sistema: clique com o botão direito.</p>
+    <div class="grid">
+      <div class="card"><h3>Inatividade</h3><p>Depois de 15 s, 30 s, 1, 2 ou 5 minutos parado.</p></div>
+      <div class="card"><h3>KVM</h3><p>Enquanto monitor, mouse ou teclado escolhidos estiverem desconectados.</p></div>
+      <div class="card"><h3>Ambos</h3><p>Qualquer uma das duas condições.</p></div>
+      <div class="card"><h3>Sempre</h3><p>Enquanto o like-move estiver ativo.</p></div>
+      <div class="card"><h3>Iniciar com Windows</h3><p>Abre junto com o Windows, sem pedir administrador.</p></div>
+      <div class="card"><h3>Atualizações</h3><p>Avisa quando há versão nova e instala ao lado da atual.</p></div>
+    </div>
+  </section>
+
+  <section id="seguranca">
+    <h2>Seguro fora de casa</h2>
+    <p class="lead">Deixar a tela bloquear protege você em lugares públicos. O like-move respeita isso.</p>
+    <div class="grid">
+      <div class="card"><h3>Só em redes confiáveis</h3><p>Marque o Wi-Fi de casa pelo nome e pelo ponto de acesso. Uma rede falsa com o mesmo nome não é aceita.</p></div>
+      <div class="card"><h3>Fora delas, bloqueia</h3><p>No café ou no aeroporto o Windows bloqueia normalmente.</p></div>
+      <div class="card"><h3>Não simula mouse nem teclado</h3><p>Pede ao próprio Windows para manter a tela ligada, o mesmo recurso que players de vídeo usam.</p></div>
+      <div class="card"><h3>Fechou, voltou ao normal</h3><p>Não muda nenhuma configuração do Windows. Sem o programa aberto, tudo fica como antes.</p></div>
+    </div>
+  </section>
+
+  <section id="numeros">
+    <h2>Leve e direto</h2>
+    <div class="stats">
+      <div class="stat"><b>4</b><span>modos de uso</span></div>
+      <div class="stat"><b>0</b><span>cliques ou teclas simulados</span></div>
+      <div class="stat"><b>0</b><span>instalação ou administrador</span></div>
+    </div>
+  </section>
+
+  <section id="telas">
+    <h2>O que você vê</h2>
+    <div class="shots">
+      <figure><img src="assets/tray-active.png" width="96" alt="Ícone verde do like-move na bandeja: ativo" /><figcaption>Verde: ativo</figcaption></figure>
+      <figure><img src="assets/tray-paused.png" width="96" alt="Ícone cinza do like-move na bandeja: pausado" /><figcaption>Cinza: pausado</figcaption></figure>
+      <figure><img src="assets/about.png" width="315" alt="Janela Sobre do like-move com o resumo do menu: Ativo, Modo, Threshold e Dispositivos KVM" /><figcaption>Janela “Sobre”</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="como-usar">
+    <h2>Como usar</h2>
+    <ol class="steps">
+      <li>No terminal, rode <code>npx like-move</code>. Ele baixa a versão mais recente, confere o sha256, instala em <code>%LOCALAPPDATA%\Programs\like-move</code> e abre o app: o ícone verde aparece na bandeja do sistema.
+        <br />Sem Node: <a href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/like-move-win64.zip">baixe o <code>like-move-win64.zip</code></a>, extraia numa pasta sua (ex.: <code>Documentos\like-move</code>) e abra <code>like-move.exe</code>.</li>
+      <li>Clique com o botão direito no ícone e escolha o modo, o tempo e, se quiser, <b>Só em redes confiáveis</b>.</li>
+      <li>Opcional: marque <b>Iniciar com Windows</b>.</li>
+    </ol>
+    <p class="lead" style="margin-top:18px">Windows 10 ou 11. Não precisa de Python, instalação nem administrador.
+      Prefere scripts que você lê antes de rodar? Há uma versão em PowerShell que age só no Wi-Fi de casa:
+      <code>npx like-move home-awake</code> (ou <a href="https://github.com/AllanSantos-DV/like-move/releases/latest/download/home-awake.zip">home-awake.zip</a>).</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">like-move · licença MIT · <a href="https://github.com/AllanSantos-DV/like-move">código no GitHub</a></div>
+</footer>
+<script>
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copiado"; }
+    catch { b.textContent = "Selecione e copie"; }
+    setTimeout(() => { b.textContent = "Copiar"; }, 2000);
+  }));
+</script>
+</body>
+</html>
