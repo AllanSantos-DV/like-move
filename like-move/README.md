@@ -187,7 +187,7 @@ Os valores padrão estão em `like_move/config.py`:
 | `IDLE_THRESHOLD_SECONDS` | 30 | Segundos de inatividade antes de manter acordado |
 | `CHECK_INTERVAL_SECONDS` | 1 | Intervalo de checagem do estado |
 
-As preferências alteradas pelo menu (modo, threshold, dispositivos, redes confiáveis, auto-update) são **persistidas** em `%APPDATA%\like-move\config.json` e recarregadas na próxima execução.
+As preferências alteradas pelo menu (modo, threshold, dispositivos, redes confiáveis, auto-update) são **persistidas** em `%APPDATA%\like-move\config.json` e recarregadas na próxima execução. O `.exe` grava o registro de execução em `%APPDATA%\like-move\like-move.log` (até 1 MB, mais uma cópia anterior).
 
 ---
 

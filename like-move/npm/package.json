@@ -1,6 +1,6 @@
 {
   "name": "like-move",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "description": "Instala e abre o like-move (tela do Windows sem bloquear, só quando você quer) com um comando: baixa a release do GitHub, confere o sha256 e roda sem administrador. Também instala o Home Awake.",
   "type": "module",
   "bin": {

@@ -7,15 +7,30 @@ Uso: pythonw main.pyw
 """
 
 import logging
+import logging.handlers
+import os
 import sys
 
-# Configurar logging (vai para stderr quando executado com python;
-# silencioso com pythonw pois não há console)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
+LOG_FILENAME = "like-move.log"
+
+
+def configure_logging(log_dir: str) -> None:
+    """Loga no stderr quando há console; sem console (.exe, pythonw) grava ``<log_dir>/like-move.log``."""
+    if sys.stderr is not None:
+        handler: logging.Handler = logging.StreamHandler()
+    else:
+        os.makedirs(log_dir, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(
+            os.path.join(log_dir, LOG_FILENAME), maxBytes=1_000_000, backupCount=1, encoding="utf-8"
+        )
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[handler],
+    )
+
+
 logger = logging.getLogger("like-move")
 
 
@@ -30,6 +45,9 @@ def _replaced_dir(argv: list[str]) -> str:
 
 def main() -> None:
     """Entry point principal."""
+    from like_move.settings import config_dir
+
+    configure_logging(config_dir())
     # Verificar se está rodando no Windows
     if sys.platform != "win32":
         logger.error("like-move só funciona no Windows.")

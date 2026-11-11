@@ -68,10 +68,9 @@ def disable_startup() -> None:
 
 
 def toggle_startup() -> bool:
-    """Alterna o estado de inicialização automática. Retorna o novo estado."""
+    """Alterna o estado de inicialização automática. Retorna o estado lido do registro depois."""
     if is_startup_enabled():
         disable_startup()
-        return False
     else:
         enable_startup()
-        return True
+    return is_startup_enabled()
