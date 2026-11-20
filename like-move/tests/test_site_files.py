@@ -24,5 +24,12 @@ class SiteFiles(unittest.TestCase):
         self.assertEqual(pages.public_findings(pages.REPO, pages.site_files()), [])
 
 
+    def test_link_de_volta_ao_indice_no_html_inicial(self):
+        with open(os.path.join(pages.REPO, pages.SITE, "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn('<a class="all" href="https://allansantos-dv.github.io/">Todos os produtos</a>', html)
+        self.assertIn('<link rel="canonical" href="https://allansantos-dv.github.io/like-move/" />', html)
+        self.assertIn('"@id": "https://allansantos-dv.github.io/#colecao"', html)
+
 if __name__ == "__main__":
     unittest.main()
