@@ -1,16 +1,24 @@
 # Publica o pacote npm `like-move` (npx like-move) quando uma release do app é publicada: a release nasce
-# rascunho no release.yml e só é publicada depois de verificada pelo antivírus, então o pacote só aponta para
-# zips já verificados. O pacote N.N.N instala a release vN.N.N, com o sha256 de cada zip embarcado (release.json).
+# rascunho e só é publicada depois de verificada pelo antivírus, então o pacote só aponta para zips já
+# verificados. O pacote N.N.N instala a release vN.N.N, com o sha256 de cada zip embarcado (release.json).
 #
 # Publicação confiável (OIDC), como o engine-kit: sem token em segredo nenhum e com proveniência.
 # O nome deste arquivo (npm-publish.yml) é o que o cadastro do publisher confiável no npmjs.com aponta: renomear quebra.
-# Disparo manual (workflow_dispatch) serve para publicar uma release que já estava publicada antes deste workflow.
+#
+# Três portas de entrada, todas passando pelas mesmas verificações do job publish:
+#   release published   o caminho normal.
+#   schedule            rede de segurança: o GitHub emitiu o evento "published" da v1.3.7 e não iniciou nenhuma execução
+#                       (as sondas de gatilho com a mesma configuração dispararam), então a cada 6 h a última release
+#                       publicada há mais de 1 h e ausente do npm é publicada.
+#   workflow_dispatch   publica uma release já publicada, pela tag informada.
 
 name: Publish npm
 
 on:
   release:
     types: [published]
+  schedule:
+    - cron: "23 */6 * * *"
   workflow_dispatch:
     inputs:
       tag:
@@ -26,11 +34,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    # Decide qual tag publicar e se o npm ainda não a tem.
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      publish: ${{ steps.pick.outputs.publish }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="$EVENT_TAG"
+          if [ -z "$tag" ]; then
+            info="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q '[.tag_name,.published_at]|@tsv')"
+            tag="$(cut -f1 <<<"$info")"
+            age=$(( $(date +%s) - $(date -d "$(cut -f2 <<<"$info")" +%s) ))
+            if [ "$age" -lt 3600 ]; then
+              echo "release $tag publicada há ${age}s: o npm tem minutos de atraso para mostrar a versão; fica para a próxima rodada"
+              echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          fi
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/like-move/${tag#v}")"
+          case "$code" in
+            200) echo "like-move@${tag#v} já está no npm: nada a publicar"; publish=false ;;
+            404) publish=true ;;
+            *) echo "registro do npm respondeu HTTP $code"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
   publish:
+    needs: resolve
+    if: needs.resolve.outputs.publish == 'true'
     # Runner hospedado pelo GitHub, Linux (a proveniência exige hospedado). Testes rodam só na verificação local.
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      TAG: ${{ needs.resolve.outputs.tag }}
     defaults:
       run:
         shell: bash

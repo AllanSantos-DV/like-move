@@ -37,6 +37,25 @@ class WorkflowsGuard(unittest.TestCase):
             self.assertIsNone(TEST_COMMAND.search(text), os.path.basename(path))
             self.assertIsNone(CALLS_LOCAL_WORKFLOW.search(text), os.path.basename(path))
 
+    def test_publish_npm_inicia_pela_release_e_tem_rede_de_seguranca(self):
+        with open(os.path.join(REPO, ".github", "workflows", "npm-publish.yml"), encoding="utf-8") as f:
+            text = f.read()
+        self.assertRegex(text, r"(?m)^on:\n  release:\n    types: \[published\]\n")
+        self.assertRegex(text, r"(?m)^  schedule:\n    - cron: ")
+        self.assertRegex(text, r"(?m)^  workflow_dispatch:")
+        self.assertRegex(text, r"(?m)^    needs: resolve\n    if: needs\.resolve\.outputs\.publish == 'true'")
+
+    def test_publish_npm_mantem_as_verificacoes_antes_de_publicar(self):
+        with open(os.path.join(REPO, ".github", "workflows", "npm-publish.yml"), encoding="utf-8") as f:
+            text = f.read()
+        version = text.index("Tag = VERSION = package.json")
+        hashes = text.index("node scripts/release-hashes.mjs")
+        publish = text.index("npm publish --access public --provenance")
+        self.assertLess(version, hashes)
+        self.assertLess(hashes, publish)
+        self.assertIn('test "$TAG" = "v$v"', text)
+        self.assertIn("merge-base --is-ancestor", text)
+
     def test_o_guarda_pega_o_que_proibe(self):
         self.assertTrue(FORBIDDEN_RUNNER.search("    runs-on: windows-latest\n"))
         self.assertTrue(FORBIDDEN_RUNNER.search("    runs-on: macos-14\n"))
