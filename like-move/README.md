@@ -300,7 +300,7 @@ Há também uma página de vitrine estática em [`site/index.html`](site/index.h
 
 ## 📄 Licença
 
-[MIT](../LICENSE) © like-move contributors
+[MIT](../LICENSE) © Allan Santos
 
 ---
 
