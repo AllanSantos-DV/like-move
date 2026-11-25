@@ -22,7 +22,7 @@ def state(**kw):
         enabled=True, trusted_only=False, trigger_mode=TriggerMode.IDLE, idle_threshold=30,
         ac_only=False, lock_on_untrusted=False, display_may_sleep=False, awake_until=0.0, notify_transitions=False,
         trusted_networks=[{"ssid": "casa", "bssid": ""}], watched_processes=[], cpu_threshold=0,
-        battery_floor=0, lock_when_done=False,
+        battery_floor=0, lock_when_done=False, work_hours={"enabled": False, "days": [0, 1, 2, 3, 4], "start": "09:00", "end": "18:00"},
     )
     base.update(kw)
     st = SimpleNamespace(**base)

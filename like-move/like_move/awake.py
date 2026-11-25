@@ -7,6 +7,7 @@ Windows o descarta quando o processo termina.
 """
 
 import ctypes
+import datetime as dt
 import logging
 import threading
 import time
@@ -42,6 +43,7 @@ REASON_UNTRUSTED = "fora de rede confiável"
 REASON_BATTERY = "na bateria"
 REASON_LOW_BATTERY = "bateria baixa"
 REASON_TIMED = "prazo"
+REASON_SCHEDULED = "horário"
 REASON_PROCESS = "programa em execução"
 REASON_CPU = "CPU alta"
 REASON_ALWAYS = "Sempre"
@@ -49,7 +51,7 @@ REASON_IDLE = "inatividade"
 REASON_KVM = "KVM"
 REASON_WAITING = "aguardando"
 
-_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
+_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_SCHEDULED, REASON_PROCESS, REASON_CPU, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
 
 # Gatilhos que acabam por conta própria: o fim deles é o "terminou" de "Bloquear a tela ao terminar".
 _SELF_ENDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU})
@@ -87,6 +89,7 @@ def decide_keep_awake(
     locked: bool,
     on_ac: bool = True,
     timed: bool = False,
+    scheduled: bool = False,
     process_running: bool = False,
     cpu_busy: bool = False,
     battery_low: bool = False,
@@ -109,6 +112,8 @@ def decide_keep_awake(
         return Decision(False, REASON_LOW_BATTERY)
     if timed:
         return Decision(True, REASON_TIMED)
+    if scheduled:
+        return Decision(True, REASON_SCHEDULED)
     if process_running:
         return Decision(True, REASON_PROCESS)
     if cpu_busy:
@@ -132,6 +137,7 @@ def should_keep_awake(
     locked: bool,
     on_ac: bool = True,
     timed: bool = False,
+    scheduled: bool = False,
     process_running: bool = False,
     cpu_busy: bool = False,
     battery_low: bool = False,
@@ -140,7 +146,7 @@ def should_keep_awake(
     return decide_keep_awake(
         state, idle_seconds=idle_seconds, device_disconnected=device_disconnected,
         trusted=trusted, locked=locked, on_ac=on_ac, timed=timed,
-        process_running=process_running, cpu_busy=cpu_busy, battery_low=battery_low,
+        scheduled=scheduled, process_running=process_running, cpu_busy=cpu_busy, battery_low=battery_low,
     ).wanted
 
 
@@ -275,6 +281,12 @@ class MonitorThread(threading.Thread):
         if not self._first_tick:
             self._notify("Prazo terminou: voltou ao modo escolhido")
         return False
+
+    def _scheduled(self, now: float) -> bool:
+        """Estamos dentro do horário de trabalho ligado? Desligado, nem olha o relógio."""
+        if not self._state.work_hours.get("enabled"):
+            return False
+        return timer.in_work_hours(self._state.work_hours, dt.datetime.fromtimestamp(now))
 
     def _read_on_ac(self) -> bool:
         """Está na tomada? Falha de leitura é registrada uma vez e conta como tomada."""
@@ -415,6 +427,7 @@ class MonitorThread(threading.Thread):
             locked=locked,
             on_ac=on_ac,
             timed=timed,
+            scheduled=self._scheduled(now),
             process_running=self._process_running(),
             cpu_busy=self._cpu_busy(),
             battery_low=self._battery_low(on_ac),

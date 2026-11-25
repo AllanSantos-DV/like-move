@@ -33,6 +33,7 @@
 - **4 modos de trigger**: Inatividade, KVM (event-driven), Ambos ou Sempre
 - **🔒 Redes Wi-Fi confiáveis** — mantém a tela acordada só em redes que você confia (casa/trabalho); em Wi-Fi público deixa bloquear. Casa por SSID **+ BSSID** (anti *evil-twin*)
 - **⏱️ Prazo** — "Manter acordado por…" (30 min, 1 h, 2 h, 4 h ou até 12:00/18:00/22:00): 2 minutos antes do fim avisa, para você prorrogar, e no fim volta sozinho ao modo escolhido
+- **🕘 Horário de trabalho** — mantém acordado nos dias e horas que você escolher (por exemplo, seg–sex 09:00–18:00), sem lembrar de ligar nada; vem desligado
 - **🖥️ Programas vigiados** — mantém acordado enquanto um programa que você escolher estiver aberto (um render, um build, um download), sem lembrar de ligar o "Sempre"
 - **📈 CPU ocupada** — mantém acordado enquanto o processador fica acima de 25%, 50% ou 75%, mesmo sem teclado nem mouse
 - **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
@@ -122,6 +123,7 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 | **Dispositivos KVM →** | Seleciona quais dispositivos monitorar (visível nos modos KVM/Ambos) |
 | **Threshold →** | Tempo de inatividade antes de manter acordado (15s, 30s, 1min, 2min, 5min) |
 | **Manter acordado por… →** | Mantém acordado por 30 min, 1 h, 2 h, 4 h ou até 12:00, 18:00 ou 22:00 e volta ao modo escolhido no fim; "Cancelar prazo" aparece enquanto há prazo |
+| **Horário de trabalho →** | "Ligado" (desligado por padrão) e dois horários prontos: seg–sex 09:00–18:00 ou 08:00–20:00. Dentro da janela o PC fica acordado (status "Acordado agora: horário"); escolher um horário só troca os dias e as horas, não liga nem desliga. O início vale e o fim não; uma janela que termina antes de começar (como 22:00–06:00 no `config.json`) atravessa a meia-noite e pertence ao dia em que começou. Passa pelas mesmas travas: tela bloqueada, rede não confiável e bateria ainda soltam o pedido |
 | **Programas vigiados →** | Lista os programas vigiados (clique remove) e, em "Vigiar um programa", os que têm janela aberta agora; "Parar de vigiar todos" limpa. Enquanto algum vigiado roda, o PC fica acordado (status "Acordado agora: programa em execução") |
 | **CPU ocupada →** | Desligado (padrão) ou acima de 25%, 50% ou 75% de uso do processador. Liga depois de cerca de 5 s seguidos acima do limite e só solta depois de cerca de 30 s abaixo, para um trabalho com pausas curtas não ligar e desligar o pedido (status "Acordado agora: CPU alta") |
 | **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis, liga "Só em redes confiáveis" e "Bloquear a tela ao sair da rede" |

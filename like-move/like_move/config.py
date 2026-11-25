@@ -3,7 +3,7 @@
 import enum
 import logging
 
-from . import settings
+from . import settings, timer
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,18 @@ def _clean_battery_floor(value: object) -> int:
         logger.warning("battery_floor inválido na configuração; desligando")
         return 0
     return value
+
+
+def _clean_work_hours(value: object) -> dict:
+    """Horário de trabalho da configuração; ausente ou malformado volta ao padrão (desligado), com aviso se malformado."""
+    default = settings.DEFAULTS["work_hours"]
+    if value is None:
+        return {**default, "days": list(default["days"])}
+    parsed = timer.parse_work_hours(value)
+    if parsed is None:
+        logger.warning("work_hours inválido na configuração; desligando")
+        return {**default, "days": list(default["days"])}
+    return parsed
 
 
 class TriggerMode(enum.Enum):
@@ -101,6 +113,7 @@ class JigglerState:
         self.cpu_threshold: int = _clean_cpu_threshold(data.get("cpu_threshold"))
         self.battery_floor: int = _clean_battery_floor(data.get("battery_floor"))
         self.lock_when_done: bool = bool(data.get("lock_when_done", False))
+        self.work_hours: dict = _clean_work_hours(data.get("work_hours"))
         try:
             self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -128,6 +141,7 @@ class JigglerState:
             "cpu_threshold": self.cpu_threshold,
             "battery_floor": self.battery_floor,
             "lock_when_done": self.lock_when_done,
+            "work_hours": self.work_hours,
         }
 
     def save(self) -> None:

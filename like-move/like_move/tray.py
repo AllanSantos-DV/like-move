@@ -30,6 +30,12 @@ TIMER_CLOCK_TIMES: list[tuple[int, int]] = [(12, 0), (18, 0), (22, 0)]
 # Limite de CPU do menu "CPU ocupada": porcentagem (0 = desligado) e rótulo
 CPU_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (25, "Acima de 25%"), (50, "Acima de 50%"), (75, "Acima de 75%")]
 
+# Horários prontos do submenu "Horário de trabalho": rótulo, dias (0 = segunda), início e fim
+WORK_HOURS_PRESETS: list[tuple[str, list[int], str, str]] = [
+    ("Seg–Sex 09:00–18:00", [0, 1, 2, 3, 4], "09:00", "18:00"),
+    ("Seg–Sex 08:00–20:00", [0, 1, 2, 3, 4], "08:00", "20:00"),
+]
+
 # Carga mínima do menu "Bateria mínima": porcentagem (0 = desligado) e rótulo
 BATTERY_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (10, "Abaixo de 10%"), (20, "Abaixo de 20%"), (30, "Abaixo de 30%")]
 
@@ -274,6 +280,29 @@ class TrayApp:
     def _is_cpu_threshold_checked(self, percent: int) -> Any:
         def check(item: MenuItem) -> bool:
             return self._state.cpu_threshold == percent
+        return check
+
+    def _on_toggle_work_hours(self, icon: Icon, item: MenuItem) -> None:
+        """Liga/desliga o horário de trabalho, mantendo os dias e as horas escolhidos."""
+        hours = self._state.work_hours
+        self._state.work_hours = {**hours, "enabled": not hours["enabled"]}
+        self._state.save()
+        logger.info("Horário de trabalho: %s", "ligado" if self._state.work_hours["enabled"] else "desligado")
+        if self._icon:
+            self._icon.update_menu()
+
+    def _on_set_work_hours(self, days: list[int], start: str, end: str) -> Any:
+        """Retorna callback que escolhe os dias e as horas do horário de trabalho (não liga nem desliga)."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.work_hours = {**self._state.work_hours, "days": list(days), "start": start, "end": end}
+            self._state.save()
+            logger.info("Horário de trabalho: dias %s, %s às %s", days, start, end)
+        return handler
+
+    def _is_work_hours_checked(self, days: list[int], start: str, end: str) -> Any:
+        def check(item: MenuItem) -> bool:
+            hours = self._state.work_hours
+            return (hours["days"], hours["start"], hours["end"]) == (days, start, end)
         return check
 
     def _on_set_battery_floor(self, percent: int) -> Any:
@@ -605,6 +634,16 @@ class TrayApp:
             for pct, label in BATTERY_OPTIONS
         ]
 
+        work_hours_items = [
+            MenuItem("Ligado", self._on_toggle_work_hours, checked=lambda item: self._state.work_hours["enabled"]),
+            Menu.SEPARATOR,
+            *[
+                MenuItem(label, self._on_set_work_hours(days, start, end),
+                         checked=self._is_work_hours_checked(days, start, end), radio=True)
+                for label, days, start, end in WORK_HOURS_PRESETS
+            ],
+        ]
+
         # Redes Wi-Fi confiáveis (segurança): submenu
         trusted_items = [
             MenuItem(self._trusted_header_text, None, enabled=False),
@@ -664,6 +703,7 @@ class TrayApp:
             ),
             MenuItem("Threshold", Menu(*threshold_items)),
             MenuItem("Manter acordado por…", Menu(*timer_items)),
+            MenuItem("Horário de trabalho", Menu(*work_hours_items)),
             MenuItem("Programas vigiados", Menu(self._watched_menu_items)),
             MenuItem("CPU ocupada", Menu(*cpu_items)),
             MenuItem("Redes confiáveis", Menu(*trusted_items)),

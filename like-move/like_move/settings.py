@@ -41,6 +41,7 @@ DEFAULTS: dict[str, Any] = {
     "notify_transitions": False,
     "battery_floor": 0,
     "lock_when_done": False,
+    "work_hours": {"enabled": False, "days": [0, 1, 2, 3, 4], "start": "09:00", "end": "18:00"},
     "awake_until": 0.0,
 }
 
