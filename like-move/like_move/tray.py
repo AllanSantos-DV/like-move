@@ -196,6 +196,9 @@ class TrayApp:
     def _on_toggle_lock_when_done(self, icon: Icon, item: MenuItem) -> None:
         self._toggle_option("lock_when_done", "Bloquear a tela ao terminar")
 
+    def _on_toggle_docked_monitors(self, icon: Icon, item: MenuItem) -> None:
+        self._toggle_option("docked_monitors", "Acordado com monitor externo")
+
     def _on_toggle_notify_transitions(self, icon: Icon, item: MenuItem) -> None:
         self._toggle_option("notify_transitions", "Avisar nas mudanças")
 
@@ -730,6 +733,11 @@ class TrayApp:
             MenuItem("Programas vigiados", Menu(self._watched_menu_items)),
             MenuItem("CPU ocupada", Menu(*cpu_items)),
             MenuItem("Rede ocupada", Menu(*network_items)),
+            MenuItem(
+                "Acordado com monitor externo",
+                self._on_toggle_docked_monitors,
+                checked=lambda item: self._state.docked_monitors,
+            ),
             MenuItem("Redes confiáveis", Menu(*trusted_items)),
             MenuItem(
                 "Só na tomada",

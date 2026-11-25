@@ -15,7 +15,7 @@ from typing import Callable, NamedTuple, Optional
 
 from .config import CHECK_INTERVAL_SECONDS, JigglerState, TriggerMode
 from .detector import (
-    battery_percent, get_execution_state, get_idle_time_ms, get_interface_octets, get_system_times, is_on_ac_power, is_screen_locked,
+    battery_percent, get_execution_state, get_idle_time_ms, get_interface_octets, get_monitor_count, get_system_times, is_on_ac_power, is_screen_locked,
     lock_workstation, running_process_names,
 )
 from . import timer, triggers
@@ -50,12 +50,13 @@ REASON_SCHEDULED = "horário"
 REASON_PROCESS = "programa em execução"
 REASON_CPU = "CPU alta"
 REASON_NETWORK = "rede em uso"
+REASON_DOCKED = "monitor externo"
 REASON_ALWAYS = "Sempre"
 REASON_IDLE = "inatividade"
 REASON_KVM = "KVM"
 REASON_WAITING = "aguardando"
 
-_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_SCHEDULED, REASON_PROCESS, REASON_CPU, REASON_NETWORK, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
+_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_SCHEDULED, REASON_PROCESS, REASON_CPU, REASON_NETWORK, REASON_DOCKED, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
 
 # Gatilhos que acabam por conta própria: o fim deles é o "terminou" de "Bloquear a tela ao terminar".
 _SELF_ENDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU})
@@ -97,6 +98,7 @@ def decide_keep_awake(
     process_running: bool = False,
     cpu_busy: bool = False,
     network_busy: bool = False,
+    docked: bool = False,
     battery_low: bool = False,
 ) -> Decision:
     """Decide se o pedido deve estar ativo agora e o motivo (puro, sem chamar o Windows).
@@ -125,6 +127,8 @@ def decide_keep_awake(
         return Decision(True, REASON_CPU)
     if network_busy:
         return Decision(True, REASON_NETWORK)
+    if docked:
+        return Decision(True, REASON_DOCKED)
     mode = state.trigger_mode
     if mode == TriggerMode.ALWAYS:
         return Decision(True, REASON_ALWAYS)
@@ -148,6 +152,7 @@ def should_keep_awake(
     process_running: bool = False,
     cpu_busy: bool = False,
     network_busy: bool = False,
+    docked: bool = False,
     battery_low: bool = False,
 ) -> bool:
     """Versão booleana de :func:`decide_keep_awake`."""
@@ -155,7 +160,8 @@ def should_keep_awake(
         state, idle_seconds=idle_seconds, device_disconnected=device_disconnected,
         trusted=trusted, locked=locked, on_ac=on_ac, timed=timed,
         scheduled=scheduled, process_running=process_running, cpu_busy=cpu_busy,
-        network_busy=network_busy, battery_low=battery_low,
+        network_busy=network_busy, docked=docked,
+        battery_low=battery_low,
     ).wanted
 
 
@@ -243,6 +249,7 @@ class MonitorThread(threading.Thread):
         self._previous_octets = None
         self._network_threshold_seen = 0
         self._network_read_failed = False
+        self._monitor_count_failed = False
         self.status = ""
         self.notifier: Optional[Callable[[str], None]] = None
 
@@ -393,6 +400,20 @@ class MonitorThread(threading.Thread):
         rate = triggers.bytes_per_second(previous[0], octets, taken - previous[1]) if previous else None
         return self._network_gate.update(rate, threshold * BYTES_PER_KB)
 
+    def _docked(self) -> bool:
+        """Há um monitor externo (dois ou mais monitores)? Falha de leitura é registrada uma vez e conta como não."""
+        if not self._state.docked_monitors:
+            return False
+        try:
+            count = get_monitor_count()
+        except OSError:
+            if not self._monitor_count_failed:
+                logger.warning("Não consegui contar os monitores; contando como sem monitor externo", exc_info=True)
+            self._monitor_count_failed = True
+            return False
+        self._monitor_count_failed = False
+        return count >= 2
+
     def _lock_if_left_trusted(self, on_trusted: bool, locked: bool) -> None:
         """Bloqueia a tela quando a rede confiável some por ``LOCK_DEBOUNCE_TICKS`` leituras seguidas."""
         if not self._state.lock_on_untrusted:
@@ -468,6 +489,7 @@ class MonitorThread(threading.Thread):
             process_running=self._process_running(),
             cpu_busy=self._cpu_busy(),
             network_busy=self._network_busy(),
+            docked=self._docked(),
             battery_low=self._battery_low(on_ac),
         )
         self.status = status_text(decision.reason, state, idle_seconds=idle_seconds)

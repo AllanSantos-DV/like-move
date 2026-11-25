@@ -23,7 +23,7 @@ def state(**kw):
         ac_only=False, lock_on_untrusted=False, display_may_sleep=False, awake_until=0.0, notify_transitions=False,
         trusted_networks=[{"ssid": "casa", "bssid": ""}], watched_processes=[], cpu_threshold=0,
         battery_floor=0, lock_when_done=False, work_hours={"enabled": False, "days": [0, 1, 2, 3, 4], "start": "09:00", "end": "18:00"},
-        network_threshold_kbps=0,
+        network_threshold_kbps=0, docked_monitors=False,
     )
     base.update(kw)
     st = SimpleNamespace(**base)

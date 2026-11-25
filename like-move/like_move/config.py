@@ -125,6 +125,7 @@ class JigglerState:
         self.lock_when_done: bool = bool(data.get("lock_when_done", False))
         self.work_hours: dict = _clean_work_hours(data.get("work_hours"))
         self.network_threshold_kbps: int = _clean_network_threshold(data.get("network_threshold_kbps"))
+        self.docked_monitors: bool = bool(data.get("docked_monitors", False))
         try:
             self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -154,6 +155,7 @@ class JigglerState:
             "lock_when_done": self.lock_when_done,
             "work_hours": self.work_hours,
             "network_threshold_kbps": self.network_threshold_kbps,
+            "docked_monitors": self.docked_monitors,
         }
 
     def save(self) -> None:

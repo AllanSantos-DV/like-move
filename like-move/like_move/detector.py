@@ -122,6 +122,9 @@ class SYSTEM_POWER_STATUS(ctypes.Structure):
 kernel32.GetSystemPowerStatus.argtypes = [ctypes.POINTER(SYSTEM_POWER_STATUS)]
 kernel32.GetSystemPowerStatus.restype = ctypes.wintypes.BOOL
 
+user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+user32.GetSystemMetrics.restype = ctypes.c_int
+
 user32.LockWorkStation.argtypes = []
 user32.LockWorkStation.restype = ctypes.wintypes.BOOL
 
@@ -134,6 +137,7 @@ _powrprof.CallNtPowerInformation.restype = ctypes.c_long
 _AC_OFFLINE = 0
 _BATTERY_PERCENT_UNKNOWN = 255
 _SYSTEM_EXECUTION_STATE = 16
+_SM_CMONITORS = 80
 
 
 def _power_status() -> SYSTEM_POWER_STATUS:
@@ -152,6 +156,14 @@ def battery_percent() -> Optional[int]:
     """Carga da bateria em % (0 a 100); ``None`` quando o Windows não sabe (255) ou não há bateria."""
     percent = _power_status().BatteryLifePercent
     return None if percent > 100 else percent
+
+
+def get_monitor_count() -> int:
+    """Quantos monitores fazem parte da área de trabalho (``SM_CMONITORS``); o Windows devolve 0 quando a leitura falha."""
+    count = user32.GetSystemMetrics(_SM_CMONITORS)
+    if count <= 0:
+        raise OSError(f"GetSystemMetrics(SM_CMONITORS) devolveu {count} (erro {ctypes.get_last_error()})")
+    return count
 
 
 def lock_workstation() -> None:

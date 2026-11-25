@@ -37,6 +37,7 @@
 - **🖥️ Programas vigiados** — mantém acordado enquanto um programa que você escolher estiver aberto (um render, um build, um download), sem lembrar de ligar o "Sempre"
 - **📈 CPU ocupada** — mantém acordado enquanto o processador fica acima de 25%, 50% ou 75%, mesmo sem teclado nem mouse
 - **🌐 Rede ocupada** — mantém acordado enquanto o tráfego de rede (recebido + enviado) fica acima de 100 KB/s, 500 KB/s ou 2 MB/s, como num download ou upload longo
+- **🖥️ Acordado com monitor externo** — mantém acordado enquanto houver dois ou mais monitores ligados (a mesa com o notebook acoplado); vem desligado
 - **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
 - **🔋 Só na tomada**, **🪫 bateria mínima**, **🔐 bloquear a tela ao sair da rede confiável**, **🔒 bloquear a tela ao terminar** e **🌙 tela pode apagar** — opções que vêm desligadas
 - **🩺 Diagnosticar bloqueio** — mostra o que bloqueia a tela no seu Windows e qual limite vence primeiro (somente leitura)
@@ -128,6 +129,7 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 | **Programas vigiados →** | Lista os programas vigiados (clique remove) e, em "Vigiar um programa", os que têm janela aberta agora; "Parar de vigiar todos" limpa. Enquanto algum vigiado roda, o PC fica acordado (status "Acordado agora: programa em execução") |
 | **CPU ocupada →** | Desligado (padrão) ou acima de 25%, 50% ou 75% de uso do processador. Liga depois de cerca de 5 s seguidos acima do limite e só solta depois de cerca de 30 s abaixo, para um trabalho com pausas curtas não ligar e desligar o pedido (status "Acordado agora: CPU alta") |
 | **Rede ocupada →** | Desligado (padrão) ou acima de 100 KB/s, 500 KB/s ou 2 MB/s (1 KB = 1024 bytes) de tráfego somado, recebido + enviado, das placas de rede. Liga depois de cerca de 5 s seguidos acima do limite e só solta depois de cerca de 30 s abaixo (status "Acordado agora: rede em uso") |
+| **Acordado com monitor externo** | Enquanto houver dois ou mais monitores na área de trabalho (`GetSystemMetrics`, `SM_CMONITORS`), o PC fica acordado (status "Acordado agora: monitor externo"). Se o Windows não responder, o like-move registra no log uma vez e conta como sem monitor externo (desligado por padrão) |
 | **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis, liga "Só em redes confiáveis" e "Bloquear a tela ao sair da rede" |
 | **Só na tomada** | Não mantém acordado enquanto o notebook está na bateria (desligado por padrão) |
 | **Bateria mínima →** | Desligado (padrão) ou abaixo de 10%, 20% ou 30%: na bateria, solta o pedido quando a carga cai abaixo do mínimo (status "Parado: bateria baixa") e só o retoma 5 pontos acima dele ou na tomada, para a leitura oscilando não ligar e desligar o pedido. Na tomada nunca vale; carga desconhecida conta como não baixa |

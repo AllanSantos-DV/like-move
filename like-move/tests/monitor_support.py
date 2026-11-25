@@ -25,6 +25,7 @@ class MonitorMixin:
             "is_on_ac_power": mock.patch.object(awake, "is_on_ac_power", return_value=True),
             "battery_percent": mock.patch.object(awake, "battery_percent", return_value=50),
             "get_interface_octets": mock.patch.object(awake, "get_interface_octets", return_value={1: (0, 0)}),
+            "get_monitor_count": mock.patch.object(awake, "get_monitor_count", return_value=1),
             "set_keep_awake": mock.patch.object(awake, "set_keep_awake"),
             "get_execution_state": mock.patch.object(
                 awake, "get_execution_state", return_value=awake.ES_SYSTEM_REQUIRED | awake.ES_DISPLAY_REQUIRED
