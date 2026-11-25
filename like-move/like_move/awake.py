@@ -223,6 +223,7 @@ class MonitorThread(threading.Thread):
         if now < until:
             if until - now <= DEADLINE_WARNING_SECONDS and self._warned_deadline != until:
                 self._warned_deadline = until
+                logger.info("Prazo para manter acordado termina em %s: avisando", timer.remaining_text(until, now))
                 self._notify(f"O prazo termina em {timer.remaining_text(until, now)}: escolha outro no menu para prorrogar")
             return True
         if self._state.awake_until == until:

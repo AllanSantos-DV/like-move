@@ -244,6 +244,13 @@ class MonitorUpdateTest(unittest.TestCase):
         self.assertIn("prorrogar", mon.notifier.call_args[0][0])
         self.m["set_keep_awake"].assert_called_once_with(True)
 
+    def test_deadline_warning_is_logged(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=900.0), self.assertLogs(awake.logger, "INFO") as logs:
+            mon._update()
+        self.assertTrue(any("avisando" in r.getMessage() for r in logs.records))
+
     def test_deadline_far_away_does_not_warn(self):
         st, mon = self.monitor(awake_until=1000.0)
         mon._first_tick = False
