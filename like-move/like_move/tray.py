@@ -15,7 +15,8 @@ from .config import JigglerState, TriggerMode
 from .device_monitor import DeviceMonitor
 from .awake import MonitorThread
 from .wifi import get_current_connection
-from . import diagnose, timer, updater
+from . import diagnose, timer, triggers, updater
+from .detector import visible_window_process_names
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,12 @@ THRESHOLD_OPTIONS: list[int] = [15, 30, 60, 120, 300]
 # Prazos do menu "Manter acordado por…": minutos e horários do relógio
 TIMER_MINUTES: list[tuple[int, str]] = [(30, "30 min"), (60, "1 hora"), (120, "2 horas"), (240, "4 horas")]
 TIMER_CLOCK_TIMES: list[tuple[int, int]] = [(12, 0), (18, 0), (22, 0)]
+
+# Limite de CPU do menu "CPU ocupada": porcentagem (0 = desligado) e rótulo
+CPU_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (25, "Acima de 25%"), (50, "Acima de 50%"), (75, "Acima de 75%")]
+
+# Quantos programas com janela aberta o submenu "Vigiar um programa" lista
+MAX_CANDIDATE_PROGRAMS: int = 25
 
 # Mapping: TriggerMode → display label
 _MODE_LABELS: dict[TriggerMode, str] = {
@@ -179,6 +186,75 @@ class TrayApp:
                     self._icon.notify(f"Diagnóstico falhou: {exc}", "like-move")
 
         threading.Thread(target=worker, daemon=True, name="like-move-diagnose").start()
+
+    def _watched_header_text(self, item: MenuItem) -> str:
+        return "Clique para deixar de vigiar:" if self._state.watched_processes else "Nenhum programa vigiado"
+
+    def _watched_menu_items(self) -> list:
+        """Itens do submenu "Programas vigiados": cada programa vigiado (clique remove) e como adicionar outro."""
+        items: list = [MenuItem(self._watched_header_text, None, enabled=False)]
+        for name in self._state.watched_processes:
+            items.append(MenuItem(name, self._on_unwatch(name), checked=lambda item: True))
+        items.append(Menu.SEPARATOR)
+        items.append(MenuItem("Vigiar um programa", Menu(self._candidate_menu_items)))
+        items.append(
+            MenuItem("Parar de vigiar todos", self._on_clear_watched, visible=lambda item: bool(self._state.watched_processes))
+        )
+        return items
+
+    def _candidate_menu_items(self) -> list:
+        """Programas com janela aberta que ainda não são vigiados."""
+        try:
+            names = visible_window_process_names()
+        except OSError:
+            logger.error("Não consegui listar os programas com janela aberta", exc_info=True)
+            return [MenuItem("Não consegui listar os programas", None, enabled=False)]
+        watched = {triggers.normalize_process_name(n) for n in self._state.watched_processes}
+        candidates = [n for n in names if n not in watched][:MAX_CANDIDATE_PROGRAMS]
+        if not candidates:
+            return [MenuItem("Nenhum programa com janela aberta", None, enabled=False)]
+        return [MenuItem(n, self._on_watch(n)) for n in candidates]
+
+    def _on_watch(self, name: str) -> Any:
+        """Retorna callback que passa a vigiar o programa ``name``."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.watched_processes.append(triggers.normalize_process_name(name))
+            self._state.save()
+            logger.info("Programa vigiado: %s", name)
+            if self._icon:
+                self._icon.update_menu()
+        return handler
+
+    def _on_unwatch(self, name: str) -> Any:
+        """Retorna callback que deixa de vigiar o programa ``name``."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.watched_processes = [n for n in self._state.watched_processes if n != name]
+            self._state.save()
+            logger.info("Programa deixou de ser vigiado: %s", name)
+            if self._icon:
+                self._icon.update_menu()
+        return handler
+
+    def _on_clear_watched(self, icon: Icon, item: MenuItem) -> None:
+        """Deixa de vigiar todos os programas."""
+        self._state.watched_processes = []
+        self._state.save()
+        logger.info("Nenhum programa vigiado")
+        if self._icon:
+            self._icon.update_menu()
+
+    def _on_set_cpu_threshold(self, percent: int) -> Any:
+        """Retorna callback que define o limite de CPU (0 desliga)."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.cpu_threshold = percent
+            self._state.save()
+            logger.info("Limite de CPU: %s", f"{percent}%" if percent else "desligado")
+        return handler
+
+    def _is_cpu_threshold_checked(self, percent: int) -> Any:
+        def check(item: MenuItem) -> bool:
+            return self._state.cpu_threshold == percent
+        return check
 
     def _on_set_threshold(self, seconds: int) -> Any:
         """Retorna callback para definir threshold específico."""
@@ -486,6 +562,11 @@ class TrayApp:
             for s in THRESHOLD_OPTIONS
         ]
 
+        cpu_items = [
+            MenuItem(label, self._on_set_cpu_threshold(pct), checked=self._is_cpu_threshold_checked(pct), radio=True)
+            for pct, label in CPU_OPTIONS
+        ]
+
         # Redes Wi-Fi confiáveis (segurança): submenu
         trusted_items = [
             MenuItem(self._trusted_header_text, None, enabled=False),
@@ -544,6 +625,8 @@ class TrayApp:
             ),
             MenuItem("Threshold", Menu(*threshold_items)),
             MenuItem("Manter acordado por…", Menu(*timer_items)),
+            MenuItem("Programas vigiados", Menu(self._watched_menu_items)),
+            MenuItem("CPU ocupada", Menu(*cpu_items)),
             MenuItem("Redes confiáveis", Menu(*trusted_items)),
             MenuItem(
                 "Só na tomada",

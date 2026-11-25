@@ -335,7 +335,8 @@ class ConfigDefaultsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
             d = os.path.join(tmp, "like-move")
             os.makedirs(d, exist_ok=True)
-            open(os.path.join(d, "config.json"), "w", encoding="utf-8").write('{"awake_until": "amanhã"}')
+            with open(os.path.join(d, "config.json"), "w", encoding="utf-8") as fh:
+                fh.write('{"awake_until": "amanhã"}')
             self.assertEqual(config.JigglerState().awake_until, 0.0)
 
     def test_new_options_are_off_by_default_and_persist(self):
@@ -360,7 +361,8 @@ class DiagnoseTest(unittest.TestCase):
     def test_real_run_writes_a_report_without_the_home_awake_enrollment_line(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = diagnose.run(out_path=os.path.join(tmp, "diagnostico.txt"))
-            text = open(out, encoding="utf-8-sig").read()
+            with open(out, encoding="utf-8-sig") as fh:
+                text = fh.read()
         self.assertIn("Diagnóstico do bloqueio de tela", text)
         self.assertNotIn("Rede de casa:", text)
 
