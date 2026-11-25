@@ -15,6 +15,29 @@ IDLE_THRESHOLD_SECONDS: int = 30
 CHECK_INTERVAL_SECONDS: int = 1
 
 
+def _clean_process_list(value: object) -> list[str]:
+    """Lista de nomes de programas vigiados; qualquer outra coisa na configuração vira lista vazia, com aviso."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        logger.warning("watched_processes inválido na configuração; ignorando")
+        return []
+    valid = [v for v in value if isinstance(v, str) and v.strip()]
+    if len(valid) != len(value):
+        logger.warning("watched_processes com %d item(ns) inválido(s) na configuração; mantendo os válidos", len(value) - len(valid))
+    return valid
+
+
+def _clean_cpu_threshold(value: object) -> int:
+    """Limite de CPU em % (0 = desligado); valor fora de 0..100 ou não numérico volta a 0, com aviso."""
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
+        logger.warning("cpu_threshold inválido na configuração; desligando")
+        return 0
+    return value
+
+
 class TriggerMode(enum.Enum):
     """Quando manter a máquina acordada."""
 
@@ -63,6 +86,8 @@ class JigglerState:
         self.ac_only: bool = bool(data.get("ac_only", False))
         self.lock_on_untrusted: bool = bool(data.get("lock_on_untrusted", False))
         self.notify_transitions: bool = bool(data.get("notify_transitions", False))
+        self.watched_processes: list[str] = _clean_process_list(data.get("watched_processes"))
+        self.cpu_threshold: int = _clean_cpu_threshold(data.get("cpu_threshold"))
         try:
             self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -85,6 +110,8 @@ class JigglerState:
             "lock_on_untrusted": self.lock_on_untrusted,
             "notify_transitions": self.notify_transitions,
             "awake_until": self.awake_until,
+            "watched_processes": self.watched_processes,
+            "cpu_threshold": self.cpu_threshold,
         }
 
     def save(self) -> None:

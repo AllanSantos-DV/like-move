@@ -2,6 +2,7 @@
 
 import ctypes
 import ctypes.wintypes
+import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,6 +10,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Win32 DLLs
 # ---------------------------------------------------------------------------
+wt_dword = ctypes.wintypes.DWORD
+
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
@@ -154,3 +157,108 @@ def get_execution_state() -> int:
     if rc != 0:
         raise OSError(f"CallNtPowerInformation retornou 0x{rc & 0xFFFFFFFF:X}")
     return state.value
+
+
+class PROCESSENTRY32W(ctypes.Structure):
+    """Estrutura PROCESSENTRY32W do Toolhelp."""
+
+    _fields_ = [
+        ("dwSize", wt_dword), ("cntUsage", wt_dword), ("th32ProcessID", wt_dword),
+        ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wt_dword), ("cntThreads", wt_dword),
+        ("th32ParentProcessID", wt_dword), ("pcPriClassBase", ctypes.c_long), ("dwFlags", wt_dword),
+        ("szExeFile", ctypes.c_wchar * 260),
+    ]
+
+
+class _FILETIME(ctypes.Structure):
+    _fields_ = [("dwLowDateTime", wt_dword), ("dwHighDateTime", wt_dword)]
+
+
+_TH32CS_SNAPPROCESS = 0x2
+_INVALID_HANDLE = ctypes.c_void_p(-1).value
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_ERROR_NO_MORE_FILES = 18
+
+kernel32.CreateToolhelp32Snapshot.argtypes = [wt_dword, wt_dword]
+kernel32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+kernel32.Process32FirstW.argtypes = [ctypes.c_void_p, ctypes.POINTER(PROCESSENTRY32W)]
+kernel32.Process32FirstW.restype = ctypes.wintypes.BOOL
+kernel32.Process32NextW.argtypes = [ctypes.c_void_p, ctypes.POINTER(PROCESSENTRY32W)]
+kernel32.Process32NextW.restype = ctypes.wintypes.BOOL
+kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
+kernel32.GetSystemTimes.argtypes = [ctypes.POINTER(_FILETIME)] * 3
+kernel32.GetSystemTimes.restype = ctypes.wintypes.BOOL
+kernel32.OpenProcess.argtypes = [wt_dword, ctypes.wintypes.BOOL, wt_dword]
+kernel32.OpenProcess.restype = ctypes.c_void_p
+kernel32.QueryFullProcessImageNameW.argtypes = [
+    ctypes.c_void_p, wt_dword, ctypes.c_wchar_p, ctypes.POINTER(wt_dword),
+]
+kernel32.QueryFullProcessImageNameW.restype = ctypes.wintypes.BOOL
+user32.EnumWindows.restype = ctypes.wintypes.BOOL
+user32.IsWindowVisible.argtypes = [ctypes.wintypes.HWND]
+user32.IsWindowVisible.restype = ctypes.wintypes.BOOL
+user32.GetWindowTextLengthW.argtypes = [ctypes.wintypes.HWND]
+user32.GetWindowThreadProcessId.argtypes = [ctypes.wintypes.HWND, ctypes.POINTER(wt_dword)]
+
+
+def running_process_names() -> set[str]:
+    """Nomes (minúsculos, como ``blender.exe``) dos programas em execução agora."""
+    snapshot = kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
+    if snapshot in (None, _INVALID_HANDLE):
+        raise OSError(f"CreateToolhelp32Snapshot falhou (erro {ctypes.get_last_error()})")
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        names: set[str] = set()
+        ok = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+        while ok:
+            names.add(entry.szExeFile.lower())
+            ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        error = ctypes.get_last_error()
+        if error != _ERROR_NO_MORE_FILES:
+            raise OSError(f"Process32NextW falhou (erro {error})")
+        return names
+    finally:
+        kernel32.CloseHandle(snapshot)
+
+
+def visible_window_process_names() -> list[str]:
+    """Nomes (minúsculos) dos programas com janela visível e título, em ordem alfabética: os que o usuário reconhece."""
+    names: set[str] = set()
+    failure: list[BaseException] = []
+
+    @ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+    def each(hwnd, _lparam):
+        try:
+            if not user32.IsWindowVisible(hwnd) or user32.GetWindowTextLengthW(hwnd) == 0:
+                return True
+            pid = wt_dword()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+            if not handle:
+                return True
+            try:
+                size = wt_dword(1024)
+                buf = ctypes.create_unicode_buffer(size.value)
+                if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                    names.add(os.path.basename(buf.value).lower())
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception as exc:  # o ctypes engoliria a exceção e pararia a enumeração em silêncio
+            failure.append(exc)
+            return False
+        return True
+
+    user32.EnumWindows(each, 0)
+    if failure:
+        raise OSError(f"EnumWindows falhou: {failure[0]}") from failure[0]
+    return sorted(names)
+
+
+def get_system_times() -> tuple[int, int, int]:
+    """Tempos acumulados do sistema em intervalos de 100 ns: ``(ocioso, kernel, usuário)``; o kernel inclui o ocioso."""
+    idle, kernel, user = _FILETIME(), _FILETIME(), _FILETIME()
+    if not kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
+        raise OSError(f"GetSystemTimes falhou (erro {ctypes.get_last_error()})")
+    return tuple((t.dwHighDateTime << 32) | t.dwLowDateTime for t in (idle, kernel, user))  # type: ignore[return-value]

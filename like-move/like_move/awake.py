@@ -14,8 +14,10 @@ from typing import Callable, NamedTuple, Optional
 
 from .config import CHECK_INTERVAL_SECONDS, JigglerState, TriggerMode
 from .detector import (
-    get_execution_state, get_idle_time_ms, is_on_ac_power, is_screen_locked, lock_workstation,
+    get_execution_state, get_idle_time_ms, get_system_times, is_on_ac_power, is_screen_locked, lock_workstation,
+    running_process_names,
 )
+from . import timer, triggers
 from .device_monitor import DeviceMonitor
 from .wifi import is_on_trusted_network
 
@@ -28,17 +30,22 @@ ES_DISPLAY_REQUIRED: int = 0x00000002
 # Leituras seguidas fora da rede confiável antes de bloquear a tela: um soluço do Wi-Fi não pode bloquear.
 LOCK_DEBOUNCE_TICKS: int = 5
 
+# Segundos antes do fim do prazo em que o usuário é avisado, para poder prorrogar.
+DEADLINE_WARNING_SECONDS: int = 120
+
 REASON_DISABLED = "desativado"
 REASON_LOCKED = "tela bloqueada"
 REASON_UNTRUSTED = "fora de rede confiável"
 REASON_BATTERY = "na bateria"
 REASON_TIMED = "prazo"
+REASON_PROCESS = "programa em execução"
+REASON_CPU = "CPU alta"
 REASON_ALWAYS = "Sempre"
 REASON_IDLE = "inatividade"
 REASON_KVM = "KVM"
 REASON_WAITING = "aguardando"
 
-_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
+_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
 
 _kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 _kernel32.SetThreadExecutionState.argtypes = [ctypes.c_uint]
@@ -68,11 +75,13 @@ def decide_keep_awake(
     locked: bool,
     on_ac: bool = True,
     timed: bool = False,
+    process_running: bool = False,
+    cpu_busy: bool = False,
 ) -> Decision:
     """Decide se o pedido deve estar ativo agora e o motivo (puro, sem chamar o Windows).
 
     As travas (desativado, tela bloqueada, rede não confiável, bateria) valem antes de qualquer modo,
-    inclusive durante um prazo.
+    inclusive durante um prazo, um programa vigiado ou uma CPU ocupada.
     """
     if not state.enabled:
         return Decision(False, REASON_DISABLED)
@@ -85,6 +94,10 @@ def decide_keep_awake(
         return Decision(False, REASON_BATTERY)
     if timed:
         return Decision(True, REASON_TIMED)
+    if process_running:
+        return Decision(True, REASON_PROCESS)
+    if cpu_busy:
+        return Decision(True, REASON_CPU)
     mode = state.trigger_mode
     if mode == TriggerMode.ALWAYS:
         return Decision(True, REASON_ALWAYS)
@@ -104,11 +117,14 @@ def should_keep_awake(
     locked: bool,
     on_ac: bool = True,
     timed: bool = False,
+    process_running: bool = False,
+    cpu_busy: bool = False,
 ) -> bool:
     """Versão booleana de :func:`decide_keep_awake`."""
     return decide_keep_awake(
         state, idle_seconds=idle_seconds, device_disconnected=device_disconnected,
         trusted=trusted, locked=locked, on_ac=on_ac, timed=timed,
+        process_running=process_running, cpu_busy=cpu_busy,
     ).wanted
 
 
@@ -160,6 +176,12 @@ class MonitorThread(threading.Thread):
         self._state_read_failed = False
         self._ac_read_failed = False
         self._first_tick = True
+        self._warned_deadline = 0.0
+        self._cpu_gate = triggers.CpuLoadGate()
+        self._previous_times = None
+        self._cpu_threshold_seen = 0
+        self._process_read_failed = False
+        self._cpu_read_failed = False
         self.status = ""
         self.notifier: Optional[Callable[[str], None]] = None
 
@@ -199,6 +221,9 @@ class MonitorThread(threading.Thread):
         if not until:
             return False
         if now < until:
+            if until - now <= DEADLINE_WARNING_SECONDS and self._warned_deadline != until:
+                self._warned_deadline = until
+                self._notify(f"O prazo termina em {timer.remaining_text(until, now)}: escolha outro no menu para prorrogar")
             return True
         if self._state.awake_until == until:
             self._state.awake_until = 0.0
@@ -219,6 +244,42 @@ class MonitorThread(threading.Thread):
             return True
         self._ac_read_failed = False
         return on_ac
+
+    def _process_running(self) -> bool:
+        """Algum programa vigiado roda? Falha de leitura é registrada uma vez e conta como não."""
+        if not self._state.watched_processes:
+            return False
+        try:
+            running = running_process_names()
+        except OSError:
+            if not self._process_read_failed:
+                logger.warning("Não consegui listar os programas em execução", exc_info=True)
+            self._process_read_failed = True
+            return False
+        self._process_read_failed = False
+        return triggers.any_running(self._state.watched_processes, running)
+
+    def _cpu_busy(self) -> bool:
+        """A CPU está ocupada (acima do limite, com histerese)? Opção desligada zera o histórico."""
+        threshold = self._state.cpu_threshold
+        if threshold != self._cpu_threshold_seen:
+            self._cpu_threshold_seen = threshold
+            self._cpu_gate.reset()
+        if not threshold:
+            self._cpu_gate.reset()
+            self._previous_times = None
+            return False
+        try:
+            times = get_system_times()
+        except OSError:
+            if not self._cpu_read_failed:
+                logger.warning("Não consegui ler o uso da CPU", exc_info=True)
+            self._cpu_read_failed = True
+            return self._cpu_gate.busy
+        self._cpu_read_failed = False
+        previous, self._previous_times = self._previous_times, times
+        percent = triggers.cpu_percent(previous, times) if previous else None
+        return self._cpu_gate.update(percent, threshold)
 
     def _lock_if_left_trusted(self, on_trusted: bool, locked: bool) -> None:
         """Bloqueia a tela quando a rede confiável some por ``LOCK_DEBOUNCE_TICKS`` leituras seguidas."""
@@ -274,6 +335,8 @@ class MonitorThread(threading.Thread):
             locked=locked,
             on_ac=self._read_on_ac() if state.ac_only else True,
             timed=timed,
+            process_running=self._process_running(),
+            cpu_busy=self._cpu_busy(),
         )
         self.status = status_text(decision.reason, state, idle_seconds=idle_seconds)
         wanted = decision.wanted

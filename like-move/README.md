@@ -32,7 +32,9 @@
 
 - **4 modos de trigger**: Inatividade, KVM (event-driven), Ambos ou Sempre
 - **🔒 Redes Wi-Fi confiáveis** — mantém a tela acordada só em redes que você confia (casa/trabalho); em Wi-Fi público deixa bloquear. Casa por SSID **+ BSSID** (anti *evil-twin*)
-- **⏱️ Prazo** — "Manter acordado por…" (30 min, 1 h, 2 h, 4 h ou até 12:00/18:00/22:00): no fim volta sozinho ao modo escolhido
+- **⏱️ Prazo** — "Manter acordado por…" (30 min, 1 h, 2 h, 4 h ou até 12:00/18:00/22:00): 2 minutos antes do fim avisa, para você prorrogar, e no fim volta sozinho ao modo escolhido
+- **🖥️ Programas vigiados** — mantém acordado enquanto um programa que você escolher estiver aberto (um render, um build, um download), sem lembrar de ligar o "Sempre"
+- **📈 CPU ocupada** — mantém acordado enquanto o processador fica acima de 25%, 50% ou 75%, mesmo sem teclado nem mouse
 - **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
 - **🔋 Só na tomada** e **🔐 bloquear a tela ao sair da rede confiável** — opções que vêm desligadas
 - **🩺 Diagnosticar bloqueio** — mostra o que bloqueia a tela no seu Windows e qual limite vence primeiro (somente leitura)
@@ -120,6 +122,8 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 | **Dispositivos KVM →** | Seleciona quais dispositivos monitorar (visível nos modos KVM/Ambos) |
 | **Threshold →** | Tempo de inatividade antes de manter acordado (15s, 30s, 1min, 2min, 5min) |
 | **Manter acordado por… →** | Mantém acordado por 30 min, 1 h, 2 h, 4 h ou até 12:00, 18:00 ou 22:00 e volta ao modo escolhido no fim; "Cancelar prazo" aparece enquanto há prazo |
+| **Programas vigiados →** | Lista os programas vigiados (clique remove) e, em "Vigiar um programa", os que têm janela aberta agora; "Parar de vigiar todos" limpa. Enquanto algum vigiado roda, o PC fica acordado (status "Acordado agora: programa em execução") |
+| **CPU ocupada →** | Desligado (padrão) ou acima de 25%, 50% ou 75% de uso do processador. Liga depois de cerca de 5 s seguidos acima do limite e só solta depois de cerca de 30 s abaixo, para um trabalho com pausas curtas não ligar e desligar o pedido (status "Acordado agora: CPU alta") |
 | **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis, liga "Só em redes confiáveis" e "Bloquear a tela ao sair da rede" |
 | **Só na tomada** | Não mantém acordado enquanto o notebook está na bateria (desligado por padrão) |
 | **Avisar nas mudanças** | Mostra um aviso quando o like-move passa a manter ou a soltar o PC (desligado por padrão) |
@@ -226,6 +230,7 @@ like_move/
 ├── device_monitor.py     → Monitor de dispositivos event-driven (WM_DEVICECHANGE)
 ├── wifi.py               → Rede Wi-Fi atual (SSID+BSSID) via WLAN API + gate de confiança
 ├── awake.py              → Decide quando manter acordado (SetThreadExecutionState) + thread de monitoramento, status, bloqueio ao sair da rede e vigia do pedido
+├── triggers.py           → Gatilhos por programa em execução e por carga de CPU (lógica pura)
 ├── timer.py              → Prazo ("manter acordado por…"): fim e texto do tempo restante
 ├── diagnose.py           → Diagnóstico de bloqueio (lê as configurações pelo HomeAwake.psm1, somente leitura)
 ├── updater.py            → Auto-update via GitHub Releases (nova versão numa pasta ao lado)
@@ -235,7 +240,9 @@ like_move/
 └── startup.py            → Iniciar com Windows via registro HKCU (sem admin)
 ```
 
-O monitor também confere, a cada ciclo em que mantém o pedido, se o sistema ainda mostra os bits de tela e sistema ligados (`CallNtPowerInformation`, estado de execução do sistema): se o pedido sumiu (por exemplo, no Modern Standby com bateria), registra um aviso no log e o reafirma uma vez. Como o estado soma os pedidos de todos os programas, ele só acusa perda quando nenhum programa mantém a tela; se outro programa a mantém, a perda do nosso pedido não aparece.
+O monitor também confere, a cada ciclo em que mantém o pedido, se o sistema ainda mostra os bits de tela e sistema ligados (`CallNtPowerInformation`, estado de execução do sistema): se o pedido sumiu (por exemplo, no Modern Standby com bateria), registra um aviso no log e o reafirma uma vez. Os gatilhos de programa e de CPU valem em qualquer modo e passam pelas mesmas travas: tela bloqueada, rede não confiável e bateria (com "Só na tomada") ainda soltam o pedido. A lista de programas vem do Windows (Toolhelp) e a carga de CPU de `GetSystemTimes`; nada disso sai do PC. A CPU é a do sistema todo, então um PC já carregado por outros programas fica acordado enquanto estiver acima do limite.
+
+Como o estado soma os pedidos de todos os programas, ele só acusa perda quando nenhum programa mantém a tela; se outro programa a mantém, a perda do nosso pedido não aparece.
 
 **Threads:**
 - **Principal** — event loop do pystray (system tray)

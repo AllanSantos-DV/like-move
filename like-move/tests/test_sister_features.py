@@ -21,7 +21,7 @@ def state(**kw):
     base = dict(
         enabled=True, trusted_only=False, trigger_mode=TriggerMode.IDLE, idle_threshold=30,
         ac_only=False, lock_on_untrusted=False, awake_until=0.0, notify_transitions=False,
-        trusted_networks=[{"ssid": "casa", "bssid": ""}],
+        trusted_networks=[{"ssid": "casa", "bssid": ""}], watched_processes=[], cpu_threshold=0,
     )
     base.update(kw)
     st = SimpleNamespace(**base)
@@ -234,6 +234,32 @@ class MonitorUpdateTest(unittest.TestCase):
         mon._update()
         self.m["set_keep_awake"].assert_called_with(True)
 
+    def test_deadline_within_two_minutes_warns_once_and_keeps_holding(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=900.0):
+            mon._update()
+            mon._update()
+        mon.notifier.assert_called_once()
+        self.assertIn("prorrogar", mon.notifier.call_args[0][0])
+        self.m["set_keep_awake"].assert_called_once_with(True)
+
+    def test_deadline_far_away_does_not_warn(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=500.0):
+            mon._update()
+        mon.notifier.assert_not_called()
+
+    def test_a_new_deadline_warns_again(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=900.0):
+            mon._update()
+            st.awake_until = 1010.0
+            mon._update()
+        self.assertEqual(mon.notifier.call_count, 2)
+
     def test_active_deadline_holds_the_request(self):
         st, mon = self.monitor(awake_until=1000.0)
         with mock.patch.object(awake.time, "time", return_value=500.0):
@@ -309,7 +335,8 @@ class ConfigDefaultsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
             d = os.path.join(tmp, "like-move")
             os.makedirs(d, exist_ok=True)
-            open(os.path.join(d, "config.json"), "w", encoding="utf-8").write('{"awake_until": "amanhã"}')
+            with open(os.path.join(d, "config.json"), "w", encoding="utf-8") as fh:
+                fh.write('{"awake_until": "amanhã"}')
             self.assertEqual(config.JigglerState().awake_until, 0.0)
 
     def test_new_options_are_off_by_default_and_persist(self):
@@ -334,7 +361,8 @@ class DiagnoseTest(unittest.TestCase):
     def test_real_run_writes_a_report_without_the_home_awake_enrollment_line(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = diagnose.run(out_path=os.path.join(tmp, "diagnostico.txt"))
-            text = open(out, encoding="utf-8-sig").read()
+            with open(out, encoding="utf-8-sig") as fh:
+                text = fh.read()
         self.assertIn("Diagnóstico do bloqueio de tela", text)
         self.assertNotIn("Rede de casa:", text)
 
