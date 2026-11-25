@@ -21,7 +21,7 @@ def state(**kw):
     base = dict(
         enabled=True, trusted_only=False, trigger_mode=TriggerMode.IDLE, idle_threshold=30,
         ac_only=False, lock_on_untrusted=False, awake_until=0.0, notify_transitions=False,
-        trusted_networks=[{"ssid": "casa", "bssid": ""}],
+        trusted_networks=[{"ssid": "casa", "bssid": ""}], watched_processes=[], cpu_threshold=0,
     )
     base.update(kw)
     st = SimpleNamespace(**base)
