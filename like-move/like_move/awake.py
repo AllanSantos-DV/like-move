@@ -60,6 +60,7 @@ _HOLDING_REASONS = frozenset({REASON_TIMED, REASON_SCHEDULED, REASON_PROCESS, RE
 
 # Gatilhos que acabam por conta própria: o fim deles é o "terminou" de "Bloquear a tela ao terminar".
 _SELF_ENDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU})
+_RELEASED_REASONS = frozenset({REASON_WAITING, REASON_IDLE})
 
 _kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 _kernel32.SetThreadExecutionState.argtypes = [ctypes.c_uint]
@@ -198,9 +199,13 @@ def should_lock_when_done(state: JigglerState, *, ending_reason: Optional[str], 
 
     ``ending_reason`` é o motivo que mantinha o PC acordado até então. Não vale se a tela já está bloqueada nem
     quando o pedido foi solto por uma trava (desativado, tela bloqueada, rede, bateria) ou segue preso por outro motivo.
+    Ficar só preso pela inatividade (usuário longe do PC) conta como solto.
     """
     return bool(
-        state.lock_when_done and ending_reason in _SELF_ENDING_REASONS and reason == REASON_WAITING and not locked
+        state.lock_when_done
+        and ending_reason in _SELF_ENDING_REASONS
+        and reason in _RELEASED_REASONS
+        and not locked
     )
 
 
@@ -237,6 +242,8 @@ class MonitorThread(threading.Thread):
         self._battery_read_failed = False
         self._battery_is_low = False
         self._ending_reason: Optional[str] = None
+        self._ending_config: Optional[tuple] = None
+        self._deadline_expired = False
         self._done_ticks = 0
         self._first_tick = True
         self._warned_deadline = 0.0
@@ -297,6 +304,7 @@ class MonitorThread(threading.Thread):
         if self._state.awake_until == until:
             self._state.awake_until = 0.0
             self._state.save()
+            self._deadline_expired = True
         logger.info("Prazo para manter acordado terminou")
         if not self._first_tick:
             self._notify("Prazo terminou: voltou ao modo escolhido")
@@ -438,9 +446,12 @@ class MonitorThread(threading.Thread):
         """Bloqueia a tela quando um gatilho que acaba sozinho termina e o pedido segue solto por ``LOCK_DEBOUNCE_TICKS`` leituras."""
         if self._state.lock_when_done and reason in _SELF_ENDING_REASONS:
             self._ending_reason, self._done_ticks = reason, 0
+            self._ending_config = (tuple(self._state.watched_processes), self._state.cpu_threshold)
+            self._deadline_expired = False
             return
         ending = self._ending_reason
-        if not should_lock_when_done(self._state, ending_reason=ending, reason=reason, locked=locked):
+        ended_by_itself = ending is not None and self._ended_by_itself(ending)
+        if not ended_by_itself or not should_lock_when_done(self._state, ending_reason=ending, reason=reason, locked=locked):
             self._ending_reason, self._done_ticks = None, 0
             return
         self._done_ticks += 1
@@ -449,6 +460,15 @@ class MonitorThread(threading.Thread):
         self._ending_reason, self._done_ticks = None, 0
         logger.info("Terminou (%s): bloqueando a tela", ending)
         lock_workstation()
+
+    def _ended_by_itself(self, ending: str) -> bool:
+        """O gatilho acabou sozinho, e não porque o usuário o cancelou, trocou ou desligou no menu?"""
+        if ending == REASON_TIMED:
+            return self._deadline_expired
+        watched, cpu_threshold = self._ending_config or ((), 0)
+        if ending == REASON_PROCESS:
+            return tuple(self._state.watched_processes) == watched
+        return self._state.cpu_threshold == cpu_threshold and bool(cpu_threshold)
 
     def _verify_request(self) -> None:
         """Confere no sistema se o pedido continua valendo e o reafirma uma vez se foi perdido."""

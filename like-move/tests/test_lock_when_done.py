@@ -46,9 +46,12 @@ class ShouldLockWhenDoneTest(unittest.TestCase):
                 self.assertFalse(self.check(awake.REASON_PROCESS, reason=gate))
 
     def test_never_while_another_reason_keeps_holding(self):
-        for reason in (awake.REASON_ALWAYS, awake.REASON_IDLE, awake.REASON_KVM, awake.REASON_TIMED):
+        for reason in (awake.REASON_ALWAYS, awake.REASON_KVM, awake.REASON_TIMED):
             with self.subTest(reason):
                 self.assertFalse(self.check(awake.REASON_PROCESS, reason=reason))
+
+    def test_an_idle_hold_alone_counts_as_released(self):
+        self.assertTrue(self.check(awake.REASON_PROCESS, reason=awake.REASON_IDLE))
 
     def test_never_when_the_screen_is_already_locked(self):
         self.assertFalse(self.check(awake.REASON_PROCESS, locked=True))
@@ -151,14 +154,25 @@ class MonitorLockWhenDoneTest(unittest.TestCase):
         self.run_ticks(mon, awake.LOCK_DEBOUNCE_TICKS * 2)
         self.m["lock_workstation"].assert_not_called()
 
-    def test_an_idle_hold_taking_over_after_the_program_cancels_the_lock(self):
+    def test_locks_when_the_program_ends_with_the_user_away(self):
         _, mon = self.monitor()
         mon._update()
-        self.end_process()
-        self.run_ticks(mon, awake.LOCK_DEBOUNCE_TICKS - 1)
         self.m["get_idle_time_ms"].return_value = 60_000
-        self.run_ticks(mon, 1)
-        self.m["get_idle_time_ms"].return_value = 0
+        self.end_process()
+        self.run_ticks(mon, awake.LOCK_DEBOUNCE_TICKS + 1)
+        self.m["lock_workstation"].assert_called_once_with()
+
+    def test_removing_the_watched_program_in_the_menu_does_not_lock(self):
+        st, mon = self.monitor()
+        mon._update()
+        st.watched_processes = []
+        self.run_ticks(mon, awake.LOCK_DEBOUNCE_TICKS * 2)
+        self.m["lock_workstation"].assert_not_called()
+
+    def test_cancelling_the_deadline_in_the_menu_does_not_lock(self):
+        st, mon = self.monitor(watched_processes=[], awake_until=1000.0)
+        mon._update()
+        st.awake_until = 0.0
         self.run_ticks(mon, awake.LOCK_DEBOUNCE_TICKS * 2)
         self.m["lock_workstation"].assert_not_called()
 

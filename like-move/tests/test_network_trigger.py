@@ -27,9 +27,9 @@ class BytesPerSecondTest(unittest.TestCase):
         previous = {1: (0, 0), 2: (0, 0)}
         self.assertEqual(triggers.bytes_per_second(previous, {1: (100, 0), 2: (0, 300)}, 1.0), 400.0)
 
-    def test_a_32_bit_counter_wrap_is_not_a_negative_jump(self):
-        self.assertEqual(triggers.bytes_per_second({1: (WRAP - 100, 0)}, {1: (400, 0)}, 1.0), 500.0)
-        self.assertEqual(triggers.bytes_per_second({1: (0, WRAP - 10)}, {1: (0, 90)}, 2.0), 50.0)
+    def test_a_counter_that_went_back_is_not_counted_as_a_burst(self):
+        self.assertEqual(triggers.bytes_per_second({1: (WRAP - 100, 0)}, {1: (400, 0)}, 1.0), 0.0)
+        self.assertEqual(triggers.bytes_per_second({1: (0, 5000)}, {1: (0, 90)}, 2.0), 0.0)
 
     def test_an_interface_that_appeared_is_not_counted(self):
         previous, current = {1: (0, 0)}, {1: (100, 0), 2: (9_000_000, 9_000_000)}
@@ -203,15 +203,15 @@ class MonitorNetworkTest(MonitorMixin, unittest.TestCase):
             self.tick(mon, per_second=100 * 1024)
         self.m["set_keep_awake"].assert_called_once_with(True, True)
 
-    def test_a_counter_wrap_does_not_break_the_reading(self):
+    def test_a_counter_reset_does_not_hold_the_request(self):
         _, mon = self.monitor(network_threshold_kbps=100)
         self.received[0] = WRAP - 600_000
         for _ in range(triggers.NETWORK_ON_TICKS + 1):
             self.clock[0] += 1.0
-            self.received[0] = (self.received[0] + 300_000) % WRAP
+            self.received[0] = 1_000
             self.m["get_interface_octets"].return_value = {1: (self.received[0], 0)}
             mon._update()
-        self.m["set_keep_awake"].assert_called_once_with(True, True)
+        self.m["set_keep_awake"].assert_not_called()
 
     def test_it_releases_only_after_the_slow_exit(self):
         _, mon = self.monitor(network_threshold_kbps=100)

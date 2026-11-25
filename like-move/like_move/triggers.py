@@ -11,9 +11,6 @@ CPU_OFF_TICKS: int = 30
 NETWORK_ON_TICKS: int = 5
 NETWORK_OFF_TICKS: int = 30
 
-# Contadores de octetos de 32 bits (DWORD) voltam a zero depois de 4 GiB
-_COUNTER_MODULUS: int = 1 << 32
-
 
 def normalize_process_name(name: str) -> str:
     """Nome como o Windows lista: minúsculo, sem espaços nas pontas e com ``.exe`` quando faltar."""
@@ -42,9 +39,8 @@ def bytes_per_second(
 ) -> Optional[float]:
     """Tráfego total (recebido + enviado) em bytes por segundo entre duas leituras de ``get_interface_octets``.
 
-    Cada leitura mapeia a interface para ``(octetos recebidos, octetos enviados)``. A diferença é feita módulo 2**32,
-    então a volta de um contador de 32 bits não vira um salto negativo (para um intervalo curto o resultado é o mesmo
-    com contadores de 64 bits). Só contam as interfaces presentes nas duas leituras, para uma que apareceu ou sumiu não
+    Cada leitura mapeia a interface para ``(octetos recebidos, octetos enviados)``, contadores de 64 bits. Um contador
+    que diminuiu (placa desativada e reativada com o mesmo índice) não conta, para não inventar um salto. Só contam as interfaces presentes nas duas leituras, para uma que apareceu ou sumiu não
     inventar tráfego; sem nenhuma em comum o tráfego medido é zero. ``None`` se o tempo não avançou.
     """
     if elapsed <= 0:
@@ -53,7 +49,7 @@ def bytes_per_second(
     for key in previous.keys() & current.keys():
         before_in, before_out = previous[key]
         now_in, now_out = current[key]
-        moved += ((now_in - before_in) % _COUNTER_MODULUS) + ((now_out - before_out) % _COUNTER_MODULUS)
+        moved += max(now_in - before_in, 0) + max(now_out - before_out, 0)
     return moved / elapsed
 
 
