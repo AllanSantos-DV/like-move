@@ -26,6 +26,34 @@ def labels(menu):
     return out
 
 
+class RefreshOnOpenTest(unittest.TestCase):
+    def make(self):
+        calls = []
+        original = mock.Mock(side_effect=lambda w, l: calls.append("original"))
+        icon = SimpleNamespace(
+            _message_handlers={tray._pystray_win32.WM_NOTIFY: original},
+            update_menu=lambda: calls.append("update_menu"),
+        )
+        app = tray.TrayApp.__new__(tray.TrayApp)
+        app._refresh_menu_on_open(icon)
+        return icon, calls
+
+    def test_right_click_rebuilds_the_menu_before_it_is_shown(self):
+        icon, calls = self.make()
+        icon._message_handlers[tray._pystray_win32.WM_NOTIFY](0, tray._pystray_win32.WM_RBUTTONUP)
+        self.assertEqual(calls, ["update_menu", "original"])
+
+    def test_left_click_does_not_rebuild_the_menu(self):
+        icon, calls = self.make()
+        icon._message_handlers[tray._pystray_win32.WM_NOTIFY](0, tray._pystray_win32.WM_LBUTTONUP)
+        self.assertEqual(calls, ["original"])
+
+    def test_missing_handler_is_logged_not_swallowed(self):
+        app = tray.TrayApp.__new__(tray.TrayApp)
+        with self.assertLogs(tray.logger, "ERROR"):
+            app._refresh_menu_on_open(SimpleNamespace(_message_handlers={}))
+
+
 class TrayFeaturesTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -108,6 +136,7 @@ class TrayFeaturesTest(unittest.TestCase):
 
     def test_notifier_is_wired_to_the_icon_when_setting_up(self):
         icon = mock.Mock()
+        icon._message_handlers = {tray._pystray_win32.WM_NOTIFY: mock.Mock()}
         with mock.patch.object(tray, "MonitorThread") as monitor_cls, \
                 mock.patch.object(self.app, "_ensure_device_monitor"), \
                 mock.patch.object(self.app, "_run_update_check"):

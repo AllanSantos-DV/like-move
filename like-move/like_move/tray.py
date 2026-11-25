@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
+from pystray._util import win32 as _pystray_win32
 import threading
 
 
@@ -576,12 +577,33 @@ class TrayApp:
             MenuItem("Sair", self._on_quit),
         )
 
+    def _refresh_menu_on_open(self, icon: Icon) -> None:
+        """Reconstrói o menu a cada clique direito.
+
+        O pystray no Windows monta o menu nativo em ``update_menu`` e não ao exibi-lo: sem isto a linha de
+        status e as entradas do prazo mostrariam o texto de quando o menu foi montado pela última vez.
+        """
+        try:
+            handlers = icon._message_handlers  # type: ignore[attr-defined]
+            original = handlers[_pystray_win32.WM_NOTIFY]
+        except (AttributeError, KeyError):
+            logger.error("pystray sem o tratador de cliques esperado; a linha de status pode ficar desatualizada", exc_info=True)
+            return
+
+        def on_notify(wparam: int, lparam: int) -> Any:
+            if lparam == _pystray_win32.WM_RBUTTONUP:
+                icon.update_menu()
+            return original(wparam, lparam)
+
+        handlers[_pystray_win32.WM_NOTIFY] = on_notify
+
     def _setup(self, icon: Icon) -> None:
         """Callback executado quando o ícone está pronto.
 
         Inicia a thread de monitoramento.
         """
         self._icon = icon
+        self._refresh_menu_on_open(icon)
         icon.visible = True
 
         self._monitor = MonitorThread(self._state)
