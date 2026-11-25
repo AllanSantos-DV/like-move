@@ -32,7 +32,7 @@
 
 - **4 modos de trigger**: Inatividade, KVM (event-driven), Ambos ou Sempre
 - **🔒 Redes Wi-Fi confiáveis** — mantém a tela acordada só em redes que você confia (casa/trabalho); em Wi-Fi público deixa bloquear. Casa por SSID **+ BSSID** (anti *evil-twin*)
-- **⏱️ Prazo** — "Manter acordado por…" (30 min, 1 h, 2 h, 4 h ou até 12:00/18:00/22:00): no fim volta sozinho ao modo escolhido
+- **⏱️ Prazo** — "Manter acordado por…" (30 min, 1 h, 2 h, 4 h ou até 12:00/18:00/22:00): 2 minutos antes do fim avisa, para você prorrogar, e no fim volta sozinho ao modo escolhido
 - **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
 - **🔋 Só na tomada** e **🔐 bloquear a tela ao sair da rede confiável** — opções que vêm desligadas
 - **🩺 Diagnosticar bloqueio** — mostra o que bloqueia a tela no seu Windows e qual limite vence primeiro (somente leitura)

@@ -234,6 +234,32 @@ class MonitorUpdateTest(unittest.TestCase):
         mon._update()
         self.m["set_keep_awake"].assert_called_with(True)
 
+    def test_deadline_within_two_minutes_warns_once_and_keeps_holding(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=900.0):
+            mon._update()
+            mon._update()
+        mon.notifier.assert_called_once()
+        self.assertIn("prorrogar", mon.notifier.call_args[0][0])
+        self.m["set_keep_awake"].assert_called_once_with(True)
+
+    def test_deadline_far_away_does_not_warn(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=500.0):
+            mon._update()
+        mon.notifier.assert_not_called()
+
+    def test_a_new_deadline_warns_again(self):
+        st, mon = self.monitor(awake_until=1000.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=900.0):
+            mon._update()
+            st.awake_until = 1010.0
+            mon._update()
+        self.assertEqual(mon.notifier.call_count, 2)
+
     def test_active_deadline_holds_the_request(self):
         st, mon = self.monitor(awake_until=1000.0)
         with mock.patch.object(awake.time, "time", return_value=500.0):

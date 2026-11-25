@@ -16,6 +16,7 @@ from .config import CHECK_INTERVAL_SECONDS, JigglerState, TriggerMode
 from .detector import (
     get_execution_state, get_idle_time_ms, is_on_ac_power, is_screen_locked, lock_workstation,
 )
+from . import timer
 from .device_monitor import DeviceMonitor
 from .wifi import is_on_trusted_network
 
@@ -27,6 +28,9 @@ ES_DISPLAY_REQUIRED: int = 0x00000002
 
 # Leituras seguidas fora da rede confiável antes de bloquear a tela: um soluço do Wi-Fi não pode bloquear.
 LOCK_DEBOUNCE_TICKS: int = 5
+
+# Segundos antes do fim do prazo em que o usuário é avisado, para poder prorrogar.
+DEADLINE_WARNING_SECONDS: int = 120
 
 REASON_DISABLED = "desativado"
 REASON_LOCKED = "tela bloqueada"
@@ -160,6 +164,7 @@ class MonitorThread(threading.Thread):
         self._state_read_failed = False
         self._ac_read_failed = False
         self._first_tick = True
+        self._warned_deadline = 0.0
         self.status = ""
         self.notifier: Optional[Callable[[str], None]] = None
 
@@ -199,6 +204,9 @@ class MonitorThread(threading.Thread):
         if not until:
             return False
         if now < until:
+            if until - now <= DEADLINE_WARNING_SECONDS and self._warned_deadline != until:
+                self._warned_deadline = until
+                self._notify(f"O prazo termina em {timer.remaining_text(until, now)}: escolha outro no menu para prorrogar")
             return True
         if self._state.awake_until == until:
             self._state.awake_until = 0.0
