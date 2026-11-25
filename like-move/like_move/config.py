@@ -100,6 +100,7 @@ class JigglerState:
         self.watched_processes: list[str] = _clean_process_list(data.get("watched_processes"))
         self.cpu_threshold: int = _clean_cpu_threshold(data.get("cpu_threshold"))
         self.battery_floor: int = _clean_battery_floor(data.get("battery_floor"))
+        self.lock_when_done: bool = bool(data.get("lock_when_done", False))
         try:
             self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -126,6 +127,7 @@ class JigglerState:
             "watched_processes": self.watched_processes,
             "cpu_threshold": self.cpu_threshold,
             "battery_floor": self.battery_floor,
+            "lock_when_done": self.lock_when_done,
         }
 
     def save(self) -> None:

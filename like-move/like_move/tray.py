@@ -182,6 +182,9 @@ class TrayApp:
     def _on_toggle_lock_on_untrusted(self, icon: Icon, item: MenuItem) -> None:
         self._toggle_option("lock_on_untrusted", "Bloquear a tela ao sair da rede")
 
+    def _on_toggle_lock_when_done(self, icon: Icon, item: MenuItem) -> None:
+        self._toggle_option("lock_when_done", "Bloquear a tela ao terminar")
+
     def _on_toggle_notify_transitions(self, icon: Icon, item: MenuItem) -> None:
         self._toggle_option("notify_transitions", "Avisar nas mudanças")
 
@@ -669,6 +672,11 @@ class TrayApp:
                 checked=lambda item: self._state.ac_only,
             ),
             MenuItem("Bateria mínima", Menu(*battery_items)),
+            MenuItem(
+                "Bloquear a tela ao terminar",
+                self._on_toggle_lock_when_done,
+                checked=lambda item: self._state.lock_when_done,
+            ),
             MenuItem(
                 "Tela pode apagar",
                 self._on_toggle_display_may_sleep,

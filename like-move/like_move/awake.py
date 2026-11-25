@@ -51,6 +51,9 @@ REASON_WAITING = "aguardando"
 
 _HOLDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
 
+# Gatilhos que acabam por conta própria: o fim deles é o "terminou" de "Bloquear a tela ao terminar".
+_SELF_ENDING_REASONS = frozenset({REASON_TIMED, REASON_PROCESS, REASON_CPU})
+
 _kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 _kernel32.SetThreadExecutionState.argtypes = [ctypes.c_uint]
 _kernel32.SetThreadExecutionState.restype = ctypes.c_uint
@@ -169,6 +172,17 @@ def should_lock_on_leave(state: JigglerState, *, was_trusted: bool, trusted: boo
     )
 
 
+def should_lock_when_done(state: JigglerState, *, ending_reason: Optional[str], reason: str, locked: bool) -> bool:
+    """True quando um gatilho que acaba sozinho (prazo, programa ou CPU) terminou e o pedido ficou solto de verdade.
+
+    ``ending_reason`` é o motivo que mantinha o PC acordado até então. Não vale se a tela já está bloqueada nem
+    quando o pedido foi solto por uma trava (desativado, tela bloqueada, rede, bateria) ou segue preso por outro motivo.
+    """
+    return bool(
+        state.lock_when_done and ending_reason in _SELF_ENDING_REASONS and reason == REASON_WAITING and not locked
+    )
+
+
 def request_lost(holding: bool, execution_state: Optional[int], display: bool = True) -> bool:
     """True se o app acredita manter o pedido mas o sistema não mostra os bits pedidos.
 
@@ -201,6 +215,8 @@ class MonitorThread(threading.Thread):
         self._ac_read_failed = False
         self._battery_read_failed = False
         self._battery_is_low = False
+        self._ending_reason: Optional[str] = None
+        self._done_ticks = 0
         self._first_tick = True
         self._warned_deadline = 0.0
         self._cpu_gate = triggers.CpuLoadGate()
@@ -348,6 +364,22 @@ class MonitorThread(threading.Thread):
             logger.info("Saiu da rede confiável: bloqueando a tela")
             lock_workstation()
 
+    def _lock_when_done(self, reason: str, locked: bool) -> None:
+        """Bloqueia a tela quando um gatilho que acaba sozinho termina e o pedido segue solto por ``LOCK_DEBOUNCE_TICKS`` leituras."""
+        if self._state.lock_when_done and reason in _SELF_ENDING_REASONS:
+            self._ending_reason, self._done_ticks = reason, 0
+            return
+        ending = self._ending_reason
+        if not should_lock_when_done(self._state, ending_reason=ending, reason=reason, locked=locked):
+            self._ending_reason, self._done_ticks = None, 0
+            return
+        self._done_ticks += 1
+        if self._done_ticks < LOCK_DEBOUNCE_TICKS:
+            return
+        self._ending_reason, self._done_ticks = None, 0
+        logger.info("Terminou (%s): bloqueando a tela", ending)
+        lock_workstation()
+
     def _verify_request(self) -> None:
         """Confere no sistema se o pedido continua valendo e o reafirma uma vez se foi perdido."""
         try:
@@ -406,4 +438,5 @@ class MonitorThread(threading.Thread):
         elif self._awake:
             self._verify_request()
         self._lock_if_left_trusted(on_trusted, locked)
+        self._lock_when_done(decision.reason, locked)
         self._first_tick = False

@@ -36,7 +36,7 @@
 - **🖥️ Programas vigiados** — mantém acordado enquanto um programa que você escolher estiver aberto (um render, um build, um download), sem lembrar de ligar o "Sempre"
 - **📈 CPU ocupada** — mantém acordado enquanto o processador fica acima de 25%, 50% ou 75%, mesmo sem teclado nem mouse
 - **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
-- **🔋 Só na tomada**, **🪫 bateria mínima**, **🔐 bloquear a tela ao sair da rede confiável** e **🌙 tela pode apagar** — opções que vêm desligadas
+- **🔋 Só na tomada**, **🪫 bateria mínima**, **🔐 bloquear a tela ao sair da rede confiável**, **🔒 bloquear a tela ao terminar** e **🌙 tela pode apagar** — opções que vêm desligadas
 - **🩺 Diagnosticar bloqueio** — mostra o que bloqueia a tela no seu Windows e qual limite vence primeiro (somente leitura)
 - **Sem simular entrada** — pede ao Windows "tela e sistema ligados" (`SetThreadExecutionState`); nada de mouse ou teclado falso
 - **🔄 Auto-update** — verifica novas releases no GitHub e instala a nova versão ao lado da atual
@@ -127,6 +127,7 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 | **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis, liga "Só em redes confiáveis" e "Bloquear a tela ao sair da rede" |
 | **Só na tomada** | Não mantém acordado enquanto o notebook está na bateria (desligado por padrão) |
 | **Bateria mínima →** | Desligado (padrão) ou abaixo de 10%, 20% ou 30%: na bateria, solta o pedido quando a carga cai abaixo do mínimo (status "Parado: bateria baixa") e só o retoma 5 pontos acima dele ou na tomada, para a leitura oscilando não ligar e desligar o pedido. Na tomada nunca vale; carga desconhecida conta como não baixa |
+| **Bloquear a tela ao terminar** | Quando um prazo, um programa vigiado ou a CPU ocupada que mantinha o PC acordado termina, bloqueia a tela (como Win+L) depois de cerca de 5 s seguidos já solto, para uma oscilação curta não bloquear. Não vale se você desligou o like-move ou mudou o modo, se o motivo era inatividade, KVM ou "Sempre", nem se a tela já estava bloqueada (desligado por padrão) |
 | **Tela pode apagar** | O like-move só impede o PC de suspender (`ES_SYSTEM_REQUIRED`) e deixa a tela apagar pelo tempo do Windows; sem ele, a tela também fica ligada. Vale para todos os modos e gatilhos, e trocar a opção com o PC já acordado refaz o pedido na hora (desligado por padrão) |
 | **Avisar nas mudanças** | Mostra um aviso quando o like-move passa a manter ou a soltar o PC (desligado por padrão) |
 | **Diagnosticar bloqueio** | Lê (sem alterar nada) o que bloqueia a tela e abre o relatório `diagnostico.txt` de `%APPDATA%\like-move` |
