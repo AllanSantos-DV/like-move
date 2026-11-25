@@ -19,10 +19,13 @@ def _clean_process_list(value: object) -> list[str]:
     """Lista de nomes de programas vigiados; qualquer outra coisa na configuração vira lista vazia, com aviso."""
     if value is None:
         return []
-    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+    if not isinstance(value, list):
         logger.warning("watched_processes inválido na configuração; ignorando")
         return []
-    return [v for v in value if v.strip()]
+    valid = [v for v in value if isinstance(v, str) and v.strip()]
+    if len(valid) != len(value):
+        logger.warning("watched_processes com %d item(ns) inválido(s) na configuração; mantendo os válidos", len(value) - len(valid))
+    return valid
 
 
 def _clean_cpu_threshold(value: object) -> int:

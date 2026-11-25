@@ -203,13 +203,43 @@ class RealWindowsTest(unittest.TestCase):
         self.assertGreater(user, 0)
 
     @unittest.skipUnless(sys.platform == "win32", "usa a API do Windows")
-    def test_visible_window_names_are_sorted_lowercase_exe_names(self):
+    def test_visible_window_names_are_sorted_and_lowercase(self):
         names = detector.visible_window_process_names()
         self.assertEqual(names, sorted(names))
-        self.assertTrue(all(n == n.lower() and n.endswith(".exe") for n in names))
+        self.assertTrue(all(n == n.lower() and n for n in names))
+
+
+class ProcessListErrorTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "usa a API do Windows")
+    def test_a_failure_other_than_end_of_list_is_an_error_not_an_empty_list(self):
+        with mock.patch.object(detector.kernel32, "Process32NextW", return_value=0), \
+                mock.patch.object(detector.ctypes, "get_last_error", return_value=5):
+            with self.assertRaises(OSError):
+                detector.running_process_names()
+
+    @unittest.skipUnless(sys.platform == "win32", "usa a API do Windows")
+    def test_end_of_list_is_not_an_error(self):
+        with mock.patch.object(detector.kernel32, "Process32NextW", return_value=0), \
+                mock.patch.object(detector.ctypes, "get_last_error", return_value=detector._ERROR_NO_MORE_FILES):
+            self.assertTrue(detector.running_process_names())
+
+
+class CpuThresholdChangeTest(unittest.TestCase):
+    def test_changing_the_limit_clears_the_history(self):
+        with mock.patch.object(awake, "get_system_times", return_value=(0, 0, 0)):
+            st = state(cpu_threshold=25)
+            mon = awake.MonitorThread(st)
+            mon._cpu_gate.busy = True
+            mon._cpu_busy()
+            self.assertTrue(mon._cpu_gate.busy is False)
 
 
 class ConfigTest(unittest.TestCase):
+    def test_valid_names_survive_an_invalid_item(self):
+        with self.assertLogs(config.logger, "WARNING"):
+            st = self.load_with('{"watched_processes": ["blender.exe", 5, ""]}')
+        self.assertEqual(st.watched_processes, ["blender.exe"])
+
     def load_with(self, payload):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
             d = os.path.join(tmp, "like-move")

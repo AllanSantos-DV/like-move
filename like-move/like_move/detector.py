@@ -177,6 +177,7 @@ class _FILETIME(ctypes.Structure):
 _TH32CS_SNAPPROCESS = 0x2
 _INVALID_HANDLE = ctypes.c_void_p(-1).value
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_ERROR_NO_MORE_FILES = 18
 
 kernel32.CreateToolhelp32Snapshot.argtypes = [wt_dword, wt_dword]
 kernel32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
@@ -195,6 +196,8 @@ kernel32.QueryFullProcessImageNameW.argtypes = [
 ]
 kernel32.QueryFullProcessImageNameW.restype = ctypes.wintypes.BOOL
 user32.EnumWindows.restype = ctypes.wintypes.BOOL
+user32.IsWindowVisible.argtypes = [ctypes.wintypes.HWND]
+user32.IsWindowVisible.restype = ctypes.wintypes.BOOL
 user32.GetWindowTextLengthW.argtypes = [ctypes.wintypes.HWND]
 user32.GetWindowThreadProcessId.argtypes = [ctypes.wintypes.HWND, ctypes.POINTER(wt_dword)]
 
@@ -212,6 +215,9 @@ def running_process_names() -> set[str]:
         while ok:
             names.add(entry.szExeFile.lower())
             ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        error = ctypes.get_last_error()
+        if error != _ERROR_NO_MORE_FILES:
+            raise OSError(f"Process32NextW falhou (erro {error})")
         return names
     finally:
         kernel32.CloseHandle(snapshot)
@@ -220,26 +226,33 @@ def running_process_names() -> set[str]:
 def visible_window_process_names() -> list[str]:
     """Nomes (minúsculos) dos programas com janela visível e título, em ordem alfabética: os que o usuário reconhece."""
     names: set[str] = set()
+    failure: list[BaseException] = []
 
     @ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
     def each(hwnd, _lparam):
-        if not user32.IsWindowVisible(hwnd) or user32.GetWindowTextLengthW(hwnd) == 0:
-            return True
-        pid = wt_dword()
-        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
-        if not handle:
-            return True
         try:
-            size = wt_dword(1024)
-            buf = ctypes.create_unicode_buffer(size.value)
-            if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
-                names.add(os.path.basename(buf.value).lower())
-        finally:
-            kernel32.CloseHandle(handle)
+            if not user32.IsWindowVisible(hwnd) or user32.GetWindowTextLengthW(hwnd) == 0:
+                return True
+            pid = wt_dword()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+            if not handle:
+                return True
+            try:
+                size = wt_dword(1024)
+                buf = ctypes.create_unicode_buffer(size.value)
+                if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                    names.add(os.path.basename(buf.value).lower())
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception as exc:  # o ctypes engoliria a exceção e pararia a enumeração em silêncio
+            failure.append(exc)
+            return False
         return True
 
     user32.EnumWindows(each, 0)
+    if failure:
+        raise OSError(f"EnumWindows falhou: {failure[0]}") from failure[0]
     return sorted(names)
 
 

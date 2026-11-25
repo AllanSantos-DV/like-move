@@ -179,6 +179,7 @@ class MonitorThread(threading.Thread):
         self._warned_deadline = 0.0
         self._cpu_gate = triggers.CpuLoadGate()
         self._previous_times = None
+        self._cpu_threshold_seen = 0
         self._process_read_failed = False
         self._cpu_read_failed = False
         self.status = ""
@@ -261,6 +262,9 @@ class MonitorThread(threading.Thread):
     def _cpu_busy(self) -> bool:
         """A CPU está ocupada (acima do limite, com histerese)? Opção desligada zera o histórico."""
         threshold = self._state.cpu_threshold
+        if threshold != self._cpu_threshold_seen:
+            self._cpu_threshold_seen = threshold
+            self._cpu_gate.reset()
         if not threshold:
             self._cpu_gate.reset()
             self._previous_times = None

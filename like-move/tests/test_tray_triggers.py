@@ -83,10 +83,22 @@ class TrayTriggersTest(unittest.TestCase):
             items = self.app._candidate_menu_items()
         self.assertEqual([text_of(i) for i in items], ["Não consegui listar os programas"])
 
-    def test_candidate_list_is_capped(self):
-        names = [f"p{i}.exe" for i in range(100)]
+    def test_candidate_list_is_capped_and_says_how_many_were_left_out(self):
+        names = [f"p{i}.exe" for i in range(40)]
         with mock.patch.object(tray, "visible_window_process_names", return_value=names):
-            self.assertEqual(len(self.app._candidate_menu_items()), tray.MAX_CANDIDATE_PROGRAMS)
+            items = self.app._candidate_menu_items()
+        self.assertEqual(len(items), tray.MAX_CANDIDATE_PROGRAMS + 1)
+        self.assertEqual(text_of(items[-1]), "… e mais 10")
+        self.assertFalse(items[-1].enabled)
+
+    def test_windows_shell_programs_are_not_offered(self):
+        with mock.patch.object(tray, "visible_window_process_names", return_value=["applicationframehost.exe", "code.exe"]):
+            self.assertEqual([text_of(i) for i in self.app._candidate_menu_items()], ["code.exe"])
+
+    def test_watching_the_same_program_twice_keeps_one_entry(self):
+        self.app._on_watch("code")(None, None)
+        self.app._on_watch("Code.exe")(None, None)
+        self.assertEqual(self.app._state.watched_processes, ["code.exe"])
 
     def test_cpu_options_are_radio_items_with_the_current_one_checked(self):
         items = self.top()["CPU ocupada"].submenu.items

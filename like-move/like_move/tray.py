@@ -31,7 +31,13 @@ TIMER_CLOCK_TIMES: list[tuple[int, int]] = [(12, 0), (18, 0), (22, 0)]
 CPU_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (25, "Acima de 25%"), (50, "Acima de 50%"), (75, "Acima de 75%")]
 
 # Quantos programas com janela aberta o submenu "Vigiar um programa" lista
-MAX_CANDIDATE_PROGRAMS: int = 25
+MAX_CANDIDATE_PROGRAMS: int = 30
+
+# Programas do próprio Windows que têm janela mas ninguém quer vigiar
+SHELL_PROGRAMS: frozenset[str] = frozenset({
+    "applicationframehost.exe", "textinputhost.exe", "systemsettings.exe", "searchhost.exe",
+    "startmenuexperiencehost.exe", "shellexperiencehost.exe", "lockapp.exe",
+})
 
 # Mapping: TriggerMode → display label
 _MODE_LABELS: dict[TriggerMode, str] = {
@@ -210,15 +216,20 @@ class TrayApp:
             logger.error("Não consegui listar os programas com janela aberta", exc_info=True)
             return [MenuItem("Não consegui listar os programas", None, enabled=False)]
         watched = {triggers.normalize_process_name(n) for n in self._state.watched_processes}
-        candidates = [n for n in names if n not in watched][:MAX_CANDIDATE_PROGRAMS]
+        candidates = [n for n in names if n not in watched and n not in SHELL_PROGRAMS]
         if not candidates:
             return [MenuItem("Nenhum programa com janela aberta", None, enabled=False)]
-        return [MenuItem(n, self._on_watch(n)) for n in candidates]
+        items = [MenuItem(n, self._on_watch(n)) for n in candidates[:MAX_CANDIDATE_PROGRAMS]]
+        if len(candidates) > MAX_CANDIDATE_PROGRAMS:
+            items.append(MenuItem(f"… e mais {len(candidates) - MAX_CANDIDATE_PROGRAMS}", None, enabled=False))
+        return items
 
     def _on_watch(self, name: str) -> Any:
         """Retorna callback que passa a vigiar o programa ``name``."""
         def handler(icon: Icon, item: MenuItem) -> None:
-            self._state.watched_processes.append(triggers.normalize_process_name(name))
+            normalized = triggers.normalize_process_name(name)
+            if normalized not in self._state.watched_processes:
+                self._state.watched_processes = [*self._state.watched_processes, normalized]
             self._state.save()
             logger.info("Programa vigiado: %s", name)
             if self._icon:
