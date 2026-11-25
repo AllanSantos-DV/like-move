@@ -14,8 +14,8 @@ from typing import Callable, NamedTuple, Optional
 
 from .config import CHECK_INTERVAL_SECONDS, JigglerState, TriggerMode
 from .detector import (
-    get_execution_state, get_idle_time_ms, get_system_times, is_on_ac_power, is_screen_locked, lock_workstation,
-    running_process_names,
+    battery_percent, get_execution_state, get_idle_time_ms, get_system_times, is_on_ac_power, is_screen_locked,
+    lock_workstation, running_process_names,
 )
 from . import timer, triggers
 from .device_monitor import DeviceMonitor
@@ -30,6 +30,9 @@ ES_DISPLAY_REQUIRED: int = 0x00000002
 # Leituras seguidas fora da rede confiável antes de bloquear a tela: um soluço do Wi-Fi não pode bloquear.
 LOCK_DEBOUNCE_TICKS: int = 5
 
+# Pontos acima do mínimo em que a carga precisa voltar para o pedido ser retomado: a leitura em % oscila.
+BATTERY_RESUME_MARGIN: int = 5
+
 # Segundos antes do fim do prazo em que o usuário é avisado, para poder prorrogar.
 DEADLINE_WARNING_SECONDS: int = 120
 
@@ -37,6 +40,7 @@ REASON_DISABLED = "desativado"
 REASON_LOCKED = "tela bloqueada"
 REASON_UNTRUSTED = "fora de rede confiável"
 REASON_BATTERY = "na bateria"
+REASON_LOW_BATTERY = "bateria baixa"
 REASON_TIMED = "prazo"
 REASON_PROCESS = "programa em execução"
 REASON_CPU = "CPU alta"
@@ -82,10 +86,11 @@ def decide_keep_awake(
     timed: bool = False,
     process_running: bool = False,
     cpu_busy: bool = False,
+    battery_low: bool = False,
 ) -> Decision:
     """Decide se o pedido deve estar ativo agora e o motivo (puro, sem chamar o Windows).
 
-    As travas (desativado, tela bloqueada, rede não confiável, bateria) valem antes de qualquer modo,
+    As travas (desativado, tela bloqueada, rede não confiável, bateria, bateria baixa) valem antes de qualquer modo,
     inclusive durante um prazo, um programa vigiado ou uma CPU ocupada.
     """
     if not state.enabled:
@@ -97,6 +102,8 @@ def decide_keep_awake(
         return Decision(False, REASON_UNTRUSTED)
     if state.ac_only and not on_ac:
         return Decision(False, REASON_BATTERY)
+    if battery_low:
+        return Decision(False, REASON_LOW_BATTERY)
     if timed:
         return Decision(True, REASON_TIMED)
     if process_running:
@@ -124,13 +131,24 @@ def should_keep_awake(
     timed: bool = False,
     process_running: bool = False,
     cpu_busy: bool = False,
+    battery_low: bool = False,
 ) -> bool:
     """Versão booleana de :func:`decide_keep_awake`."""
     return decide_keep_awake(
         state, idle_seconds=idle_seconds, device_disconnected=device_disconnected,
         trusted=trusted, locked=locked, on_ac=on_ac, timed=timed,
-        process_running=process_running, cpu_busy=cpu_busy,
+        process_running=process_running, cpu_busy=cpu_busy, battery_low=battery_low,
     ).wanted
+
+
+def is_battery_low(percent: Optional[int], floor: int, *, was_low: bool) -> bool:
+    """Carga abaixo do mínimo (``floor``; 0 = desligado)? Depois de baixa, só volta a normal em ``floor`` + ``BATTERY_RESUME_MARGIN``.
+
+    Carga desconhecida (``None``) não conta como baixa.
+    """
+    if not floor or percent is None:
+        return False
+    return percent < (floor + BATTERY_RESUME_MARGIN if was_low else floor)
 
 
 def status_text(reason: str, state: JigglerState, *, idle_seconds: float) -> str:
@@ -181,6 +199,8 @@ class MonitorThread(threading.Thread):
         self._loss_reported = False
         self._state_read_failed = False
         self._ac_read_failed = False
+        self._battery_read_failed = False
+        self._battery_is_low = False
         self._first_tick = True
         self._warned_deadline = 0.0
         self._cpu_gate = triggers.CpuLoadGate()
@@ -251,6 +271,26 @@ class MonitorThread(threading.Thread):
             return True
         self._ac_read_failed = False
         return on_ac
+
+    def _battery_low(self, on_ac: bool) -> bool:
+        """A carga está abaixo do mínimo escolhido? Só vale na bateria; falha de leitura é registrada uma vez e conta como não."""
+        floor = self._state.battery_floor
+        if not floor or on_ac:
+            self._battery_is_low = False
+            return False
+        try:
+            percent = battery_percent()
+        except OSError:
+            if not self._battery_read_failed:
+                logger.warning("Não consegui ler a carga da bateria; contando como não baixa", exc_info=True)
+            self._battery_read_failed = True
+            self._battery_is_low = False
+            return False
+        self._battery_read_failed = False
+        was_low, self._battery_is_low = self._battery_is_low, is_battery_low(percent, floor, was_low=self._battery_is_low)
+        if self._battery_is_low != was_low:
+            logger.info("Bateria em %s%% (mínimo %d%%): %s", percent, floor, "soltando o pedido" if self._battery_is_low else "retomando")
+        return self._battery_is_low
 
     def _process_running(self) -> bool:
         """Algum programa vigiado roda? Falha de leitura é registrada uma vez e conta como não."""
@@ -334,16 +374,18 @@ class MonitorThread(threading.Thread):
         idle_seconds = get_idle_time_ms() / 1000.0
         locked = is_screen_locked()
         on_trusted = is_on_trusted_network(state) if (state.trusted_only or state.lock_on_untrusted) else False
+        on_ac = self._read_on_ac() if (state.ac_only or state.battery_floor) else True
         decision = decide_keep_awake(
             state,
             idle_seconds=idle_seconds,
             device_disconnected=bool(self._device_monitor and self._device_monitor.device_disconnected),
             trusted=on_trusted,
             locked=locked,
-            on_ac=self._read_on_ac() if state.ac_only else True,
+            on_ac=on_ac,
             timed=timed,
             process_running=self._process_running(),
             cpu_busy=self._cpu_busy(),
+            battery_low=self._battery_low(on_ac),
         )
         self.status = status_text(decision.reason, state, idle_seconds=idle_seconds)
         wanted = decision.wanted

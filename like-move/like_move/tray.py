@@ -30,6 +30,9 @@ TIMER_CLOCK_TIMES: list[tuple[int, int]] = [(12, 0), (18, 0), (22, 0)]
 # Limite de CPU do menu "CPU ocupada": porcentagem (0 = desligado) e rótulo
 CPU_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (25, "Acima de 25%"), (50, "Acima de 50%"), (75, "Acima de 75%")]
 
+# Carga mínima do menu "Bateria mínima": porcentagem (0 = desligado) e rótulo
+BATTERY_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (10, "Abaixo de 10%"), (20, "Abaixo de 20%"), (30, "Abaixo de 30%")]
+
 # Quantos programas com janela aberta o submenu "Vigiar um programa" lista
 MAX_CANDIDATE_PROGRAMS: int = 30
 
@@ -268,6 +271,19 @@ class TrayApp:
     def _is_cpu_threshold_checked(self, percent: int) -> Any:
         def check(item: MenuItem) -> bool:
             return self._state.cpu_threshold == percent
+        return check
+
+    def _on_set_battery_floor(self, percent: int) -> Any:
+        """Retorna callback que define a carga mínima da bateria (0 desliga)."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.battery_floor = percent
+            self._state.save()
+            logger.info("Bateria mínima: %s", f"{percent}%" if percent else "desligado")
+        return handler
+
+    def _is_battery_floor_checked(self, percent: int) -> Any:
+        def check(item: MenuItem) -> bool:
+            return self._state.battery_floor == percent
         return check
 
     def _on_set_threshold(self, seconds: int) -> Any:
@@ -581,6 +597,11 @@ class TrayApp:
             for pct, label in CPU_OPTIONS
         ]
 
+        battery_items = [
+            MenuItem(label, self._on_set_battery_floor(pct), checked=self._is_battery_floor_checked(pct), radio=True)
+            for pct, label in BATTERY_OPTIONS
+        ]
+
         # Redes Wi-Fi confiáveis (segurança): submenu
         trusted_items = [
             MenuItem(self._trusted_header_text, None, enabled=False),
@@ -647,6 +668,7 @@ class TrayApp:
                 self._on_toggle_ac_only,
                 checked=lambda item: self._state.ac_only,
             ),
+            MenuItem("Bateria mínima", Menu(*battery_items)),
             MenuItem(
                 "Tela pode apagar",
                 self._on_toggle_display_may_sleep,

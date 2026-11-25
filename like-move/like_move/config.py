@@ -38,6 +38,16 @@ def _clean_cpu_threshold(value: object) -> int:
     return value
 
 
+def _clean_battery_floor(value: object) -> int:
+    """Carga mínima da bateria em % (0 = desligado); valor fora de 0..100 ou não numérico volta a 0, com aviso."""
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
+        logger.warning("battery_floor inválido na configuração; desligando")
+        return 0
+    return value
+
+
 class TriggerMode(enum.Enum):
     """Quando manter a máquina acordada."""
 
@@ -89,6 +99,7 @@ class JigglerState:
         self.notify_transitions: bool = bool(data.get("notify_transitions", False))
         self.watched_processes: list[str] = _clean_process_list(data.get("watched_processes"))
         self.cpu_threshold: int = _clean_cpu_threshold(data.get("cpu_threshold"))
+        self.battery_floor: int = _clean_battery_floor(data.get("battery_floor"))
         try:
             self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -114,6 +125,7 @@ class JigglerState:
             "awake_until": self.awake_until,
             "watched_processes": self.watched_processes,
             "cpu_threshold": self.cpu_threshold,
+            "battery_floor": self.battery_floor,
         }
 
     def save(self) -> None:

@@ -4,6 +4,7 @@ import ctypes
 import ctypes.wintypes
 import os
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -131,15 +132,26 @@ _powrprof.CallNtPowerInformation.argtypes = [
 _powrprof.CallNtPowerInformation.restype = ctypes.c_long
 
 _AC_OFFLINE = 0
+_BATTERY_PERCENT_UNKNOWN = 255
 _SYSTEM_EXECUTION_STATE = 16
+
+
+def _power_status() -> SYSTEM_POWER_STATUS:
+    status = SYSTEM_POWER_STATUS()
+    if not kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+        raise OSError(f"GetSystemPowerStatus falhou (erro {ctypes.get_last_error()})")
+    return status
 
 
 def is_on_ac_power() -> bool:
     """True se o PC está na tomada. Status desconhecido (255) conta como tomada: desktops não têm bateria."""
-    status = SYSTEM_POWER_STATUS()
-    if not kernel32.GetSystemPowerStatus(ctypes.byref(status)):
-        raise OSError(f"GetSystemPowerStatus falhou (erro {ctypes.get_last_error()})")
-    return status.ACLineStatus != _AC_OFFLINE
+    return _power_status().ACLineStatus != _AC_OFFLINE
+
+
+def battery_percent() -> Optional[int]:
+    """Carga da bateria em % (0 a 100); ``None`` quando o Windows não sabe (255) ou não há bateria."""
+    percent = _power_status().BatteryLifePercent
+    return None if percent > 100 else percent
 
 
 def lock_workstation() -> None:

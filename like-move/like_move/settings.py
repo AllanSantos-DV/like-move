@@ -39,6 +39,7 @@ DEFAULTS: dict[str, Any] = {
     "lock_on_untrusted": False,
     "display_may_sleep": False,
     "notify_transitions": False,
+    "battery_floor": 0,
     "awake_until": 0.0,
 }
 
