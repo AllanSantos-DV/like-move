@@ -274,3 +274,86 @@ def get_system_times() -> tuple[int, int, int]:
     if not kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
         raise OSError(f"GetSystemTimes falhou (erro {ctypes.get_last_error()})")
     return tuple((t.dwHighDateTime << 32) | t.dwLowDateTime for t in (idle, kernel, user))  # type: ignore[return-value]
+
+
+_IF_STRING_SIZE = 257
+_IF_MAX_PHYS_ADDRESS_LENGTH = 32
+_IF_TYPE_SOFTWARE_LOOPBACK = 24
+_IF_FLAG_HARDWARE = 0x01
+_IF_FLAG_FILTER = 0x02
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [("Data1", wt_dword), ("Data2", ctypes.c_ushort), ("Data3", ctypes.c_ushort), ("Data4", ctypes.c_ubyte * 8)]
+
+
+class MIB_IF_ROW2(ctypes.Structure):
+    """Estrutura MIB_IF_ROW2 de GetIfTable2; os contadores de octetos são de 64 bits."""
+
+    _fields_ = [
+        ("InterfaceLuid", ctypes.c_uint64), ("InterfaceIndex", wt_dword), ("InterfaceGuid", _GUID),
+        ("Alias", ctypes.c_wchar * _IF_STRING_SIZE), ("Description", ctypes.c_wchar * _IF_STRING_SIZE),
+        ("PhysicalAddressLength", wt_dword),
+        ("PhysicalAddress", ctypes.c_ubyte * _IF_MAX_PHYS_ADDRESS_LENGTH),
+        ("PermanentPhysicalAddress", ctypes.c_ubyte * _IF_MAX_PHYS_ADDRESS_LENGTH),
+        ("Mtu", wt_dword), ("Type", wt_dword), ("TunnelType", wt_dword), ("MediaType", wt_dword),
+        ("PhysicalMediumType", wt_dword), ("AccessType", wt_dword), ("DirectionType", wt_dword),
+        ("InterfaceAndOperStatusFlags", ctypes.c_ubyte),
+        ("OperStatus", wt_dword), ("AdminStatus", wt_dword), ("MediaConnectState", wt_dword),
+        ("NetworkGuid", _GUID), ("ConnectionType", wt_dword),
+        ("TransmitLinkSpeed", ctypes.c_uint64), ("ReceiveLinkSpeed", ctypes.c_uint64),
+        ("InOctets", ctypes.c_uint64), ("InUcastPkts", ctypes.c_uint64), ("InNUcastPkts", ctypes.c_uint64),
+        ("InDiscards", ctypes.c_uint64), ("InErrors", ctypes.c_uint64), ("InUnknownProtos", ctypes.c_uint64),
+        ("InUcastOctets", ctypes.c_uint64), ("InMulticastOctets", ctypes.c_uint64),
+        ("InBroadcastOctets", ctypes.c_uint64),
+        ("OutOctets", ctypes.c_uint64), ("OutUcastPkts", ctypes.c_uint64), ("OutNUcastPkts", ctypes.c_uint64),
+        ("OutDiscards", ctypes.c_uint64), ("OutErrors", ctypes.c_uint64), ("OutUcastOctets", ctypes.c_uint64),
+        ("OutMulticastOctets", ctypes.c_uint64), ("OutBroadcastOctets", ctypes.c_uint64),
+        ("OutQLen", ctypes.c_uint64),
+    ]
+
+
+class MIB_IF_TABLE2(ctypes.Structure):
+    """Cabeçalho de MIB_IF_TABLE2: ``NumEntries`` linhas MIB_IF_ROW2 começam em ``Table``."""
+
+    _fields_ = [("NumEntries", wt_dword), ("Table", MIB_IF_ROW2 * 1)]
+
+
+_iphlpapi = ctypes.WinDLL("iphlpapi")
+_iphlpapi.GetIfTable2.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+_iphlpapi.GetIfTable2.restype = wt_dword
+_iphlpapi.FreeMibTable.argtypes = [ctypes.c_void_p]
+_iphlpapi.FreeMibTable.restype = None
+
+
+def physical_octets(rows) -> dict[int, tuple[int, int]]:
+    """Octetos ``(recebidos, enviados)`` por índice só das placas de rede de verdade (``HardwareInterface``).
+
+    Ficam de fora o loopback, as interfaces de filtro (WFP, QoS…) e os adaptadores virtuais e túneis (Hyper-V, VPN):
+    todos repetem o tráfego da placa física, e somá-los contaria cada byte várias vezes.
+    """
+    wanted = _IF_FLAG_HARDWARE
+    return {
+        r.InterfaceIndex: (r.InOctets, r.OutOctets)
+        for r in rows
+        if r.Type != _IF_TYPE_SOFTWARE_LOOPBACK
+        and r.InterfaceAndOperStatusFlags & (_IF_FLAG_HARDWARE | _IF_FLAG_FILTER) == wanted
+    }
+
+
+def get_interface_octets() -> dict[int, tuple[int, int]]:
+    """Octetos ``(recebidos, enviados)`` acumulados por placa de rede (veja :func:`physical_octets`).
+
+    Usa GetIfTable2 e não GetIfTable: o MIB_IFROW antigo lista também as interfaces de filtro e as virtuais como se
+    fossem placas, com os mesmos contadores, sem marcar quais são, e tem contadores de 32 bits que voltam a zero.
+    """
+    table = ctypes.c_void_p()
+    rc = _iphlpapi.GetIfTable2(ctypes.byref(table))
+    if rc != 0:
+        raise OSError(f"GetIfTable2 falhou (erro {rc})")
+    try:
+        count = wt_dword.from_address(table.value).value
+        rows = (MIB_IF_ROW2 * count).from_address(table.value + MIB_IF_TABLE2.Table.offset)
+        return physical_octets(rows)
+    finally:
+        _iphlpapi.FreeMibTable(table)

@@ -30,6 +30,11 @@ TIMER_CLOCK_TIMES: list[tuple[int, int]] = [(12, 0), (18, 0), (22, 0)]
 # Limite de CPU do menu "CPU ocupada": porcentagem (0 = desligado) e rótulo
 CPU_OPTIONS: list[tuple[int, str]] = [(0, "Desligado"), (25, "Acima de 25%"), (50, "Acima de 50%"), (75, "Acima de 75%")]
 
+# Limite do menu "Rede ocupada": KB/s (0 = desligado) e rótulo
+NETWORK_OPTIONS: list[tuple[int, str]] = [
+    (0, "Desligado"), (100, "Acima de 100 KB/s"), (500, "Acima de 500 KB/s"), (2048, "Acima de 2 MB/s"),
+]
+
 # Horários prontos do submenu "Horário de trabalho": rótulo, dias (0 = segunda), início e fim
 WORK_HOURS_PRESETS: list[tuple[str, list[int], str, str]] = [
     ("Seg–Sex 09:00–18:00", [0, 1, 2, 3, 4], "09:00", "18:00"),
@@ -280,6 +285,19 @@ class TrayApp:
     def _is_cpu_threshold_checked(self, percent: int) -> Any:
         def check(item: MenuItem) -> bool:
             return self._state.cpu_threshold == percent
+        return check
+
+    def _on_set_network_threshold(self, kbps: int) -> Any:
+        """Retorna callback que define o limite de tráfego de rede em KB/s (0 desliga)."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._state.network_threshold_kbps = kbps
+            self._state.save()
+            logger.info("Limite de rede: %s", f"{kbps} KB/s" if kbps else "desligado")
+        return handler
+
+    def _is_network_threshold_checked(self, kbps: int) -> Any:
+        def check(item: MenuItem) -> bool:
+            return self._state.network_threshold_kbps == kbps
         return check
 
     def _on_toggle_work_hours(self, icon: Icon, item: MenuItem) -> None:
@@ -629,6 +647,11 @@ class TrayApp:
             for pct, label in CPU_OPTIONS
         ]
 
+        network_items = [
+            MenuItem(label, self._on_set_network_threshold(kbps), checked=self._is_network_threshold_checked(kbps), radio=True)
+            for kbps, label in NETWORK_OPTIONS
+        ]
+
         battery_items = [
             MenuItem(label, self._on_set_battery_floor(pct), checked=self._is_battery_floor_checked(pct), radio=True)
             for pct, label in BATTERY_OPTIONS
@@ -706,6 +729,7 @@ class TrayApp:
             MenuItem("Horário de trabalho", Menu(*work_hours_items)),
             MenuItem("Programas vigiados", Menu(self._watched_menu_items)),
             MenuItem("CPU ocupada", Menu(*cpu_items)),
+            MenuItem("Rede ocupada", Menu(*network_items)),
             MenuItem("Redes confiáveis", Menu(*trusted_items)),
             MenuItem(
                 "Só na tomada",

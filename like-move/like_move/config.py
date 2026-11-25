@@ -60,6 +60,16 @@ def _clean_work_hours(value: object) -> dict:
     return parsed
 
 
+def _clean_network_threshold(value: object) -> int:
+    """Limite de rede em KB/s (0 = desligado); valor negativo ou não numérico volta a 0, com aviso."""
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        logger.warning("network_threshold_kbps inválido na configuração; desligando")
+        return 0
+    return value
+
+
 class TriggerMode(enum.Enum):
     """Quando manter a máquina acordada."""
 
@@ -114,6 +124,7 @@ class JigglerState:
         self.battery_floor: int = _clean_battery_floor(data.get("battery_floor"))
         self.lock_when_done: bool = bool(data.get("lock_when_done", False))
         self.work_hours: dict = _clean_work_hours(data.get("work_hours"))
+        self.network_threshold_kbps: int = _clean_network_threshold(data.get("network_threshold_kbps"))
         try:
             self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -142,6 +153,7 @@ class JigglerState:
             "battery_floor": self.battery_floor,
             "lock_when_done": self.lock_when_done,
             "work_hours": self.work_hours,
+            "network_threshold_kbps": self.network_threshold_kbps,
         }
 
     def save(self) -> None:
