@@ -117,6 +117,8 @@ def status_text(reason: str, state: JigglerState, *, idle_seconds: float) -> str
     if reason in _HOLDING_REASONS:
         return f"Acordado agora: {reason}"
     if reason == REASON_WAITING:
+        if state.trigger_mode == TriggerMode.KVM:
+            return "Aguardando: dispositivo monitorado conectado"
         return f"Aguardando: faltam {max(0, int(state.idle_threshold - idle_seconds))}s"
     return f"Parado: {reason}"
 
@@ -157,6 +159,7 @@ class MonitorThread(threading.Thread):
         self._loss_reported = False
         self._state_read_failed = False
         self._ac_read_failed = False
+        self._first_tick = True
         self.status = ""
         self.notifier: Optional[Callable[[str], None]] = None
 
@@ -183,8 +186,12 @@ class MonitorThread(threading.Thread):
             logger.info("Monitor encerrado")
 
     def _notify(self, message: str) -> None:
-        if self.notifier:
+        if not self.notifier:
+            return
+        try:
             self.notifier(message)
+        except Exception:
+            logger.warning("Aviso ao usuário falhou", exc_info=True)
 
     def _timer_active(self, now: float) -> bool:
         """Prazo vigente? Um prazo vencido é apagado e salvo, e o usuário é avisado."""
@@ -193,10 +200,12 @@ class MonitorThread(threading.Thread):
             return False
         if now < until:
             return True
-        self._state.awake_until = 0.0
-        self._state.save()
+        if self._state.awake_until == until:
+            self._state.awake_until = 0.0
+            self._state.save()
         logger.info("Prazo para manter acordado terminou")
-        self._notify("Prazo terminou: voltou ao modo escolhido")
+        if not self._first_tick:
+            self._notify("Prazo terminou: voltou ao modo escolhido")
         return False
 
     def _read_on_ac(self) -> bool:
@@ -278,3 +287,4 @@ class MonitorThread(threading.Thread):
         elif self._awake:
             self._verify_request()
         self._lock_if_left_trusted(on_trusted, locked)
+        self._first_tick = False

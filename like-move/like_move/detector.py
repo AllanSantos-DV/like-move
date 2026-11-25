@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Win32 DLLs
 # ---------------------------------------------------------------------------
-user32 = ctypes.windll.user32  # type: ignore[attr-defined]
-kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
 
 # ---------------------------------------------------------------------------
@@ -135,14 +135,14 @@ def is_on_ac_power() -> bool:
     """True se o PC está na tomada. Status desconhecido (255) conta como tomada: desktops não têm bateria."""
     status = SYSTEM_POWER_STATUS()
     if not kernel32.GetSystemPowerStatus(ctypes.byref(status)):
-        raise OSError(f"GetSystemPowerStatus falhou (erro {ctypes.GetLastError()})")
+        raise OSError(f"GetSystemPowerStatus falhou (erro {ctypes.get_last_error()})")
     return status.ACLineStatus != _AC_OFFLINE
 
 
 def lock_workstation() -> None:
     """Bloqueia a tela do usuário (equivale a Win+L)."""
     if not user32.LockWorkStation():
-        raise OSError(f"LockWorkStation falhou (erro {ctypes.GetLastError()})")
+        raise OSError(f"LockWorkStation falhou (erro {ctypes.get_last_error()})")
 
 
 def get_execution_state() -> int:

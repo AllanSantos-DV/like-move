@@ -117,7 +117,7 @@ class TrayApp:
         logger.info("Prazo para manter acordado até %s", until)
         if self._icon:
             self._icon.icon = create_icon_image(True)
-            self._icon.notify(f"Mantendo acordado até {until}.", "like-move")
+            self._icon.notify(f"Prazo definido até {until}.", "like-move")
             self._icon.update_menu()
 
     def _on_set_timer_minutes(self, minutes: int) -> Any:
@@ -170,13 +170,12 @@ class TrayApp:
         def worker() -> None:
             try:
                 path = diagnose.run()
+                logger.info("Diagnóstico de bloqueio gravado em %s", path)
+                self._open_file(path)
             except Exception as exc:
                 logger.error("Diagnóstico de bloqueio falhou", exc_info=True)
                 if self._icon:
                     self._icon.notify(f"Diagnóstico falhou: {exc}", "like-move")
-                return
-            logger.info("Diagnóstico de bloqueio gravado em %s", path)
-            self._open_file(path)
 
         threading.Thread(target=worker, daemon=True, name="like-move-diagnose").start()
 

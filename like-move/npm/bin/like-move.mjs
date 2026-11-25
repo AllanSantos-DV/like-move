@@ -14,7 +14,7 @@ const HELP = `Uso: npx like-move [home-awake|diagnose] [--dir <pasta>] [--no-sta
 
   (sem argumento)  instala o like-move e abre o app (ícone na bandeja)
   home-awake       instala o Home Awake e roda o passo 1 (diagnóstico, somente leitura)
-  diagnose         mostra o que bloqueia a tela e se o like-move impede (somente leitura, não abre o app)
+  diagnose         instala os scripts do Home Awake e mostra o que bloqueia a tela e qual limite vence primeiro (não altera o Windows, não abre o app, espera uma tecla ao final)
   --dir <pasta>    instala em outra pasta (padrão: %LOCALAPPDATA%\\Programs\\like-move)
   --no-start       só instala, não abre
 

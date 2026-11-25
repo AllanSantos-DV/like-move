@@ -1,8 +1,11 @@
 """Configurações do like-move."""
 
 import enum
+import logging
 
 from . import settings
+
+logger = logging.getLogger(__name__)
 
 
 # Tempo de inatividade (segundos) antes de manter a máquina acordada
@@ -60,7 +63,11 @@ class JigglerState:
         self.ac_only: bool = bool(data.get("ac_only", False))
         self.lock_on_untrusted: bool = bool(data.get("lock_on_untrusted", False))
         self.notify_transitions: bool = bool(data.get("notify_transitions", False))
-        self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
+        try:
+            self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            logger.warning("awake_until inválido na configuração; ignorando o prazo")
+            self.awake_until = 0.0
 
     def to_dict(self) -> dict:
         """Serializa o estado para persistência (JSON-friendly)."""

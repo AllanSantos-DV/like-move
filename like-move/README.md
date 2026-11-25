@@ -171,7 +171,7 @@ Deixar a tela bloquear é uma medida de segurança. Manter a máquina acordada e
 | **Remover rede atual da lista** | Remove o Wi-Fi atual (visível se estiver na lista) |
 | **Esquecer todas as redes** | Limpa a lista de confiáveis |
 | **Só em redes confiáveis** | Liga o gate: age apenas em redes confiáveis |
-| **Bloquear a tela ao sair da rede** | Desligado por padrão. Quando o PC deixa uma rede confiável (cinco leituras seguidas, para um soluço do Wi-Fi não bloquear), bloqueia a tela na hora, sem esperar o limite do Windows. Só age depois de ter estado numa rede confiável e com ao menos uma rede salva |
+| **Bloquear a tela ao sair da rede** | Desligado por padrão. Quando o PC deixa uma rede confiável (cinco leituras seguidas, para um soluço do Wi-Fi não bloquear), bloqueia a tela na hora, sem esperar o limite do Windows. Só age depois de ter estado numa rede confiável e com ao menos uma rede salva. Com "exigir o mesmo ponto de acesso" ligado, trocar de ponto de acesso na mesma rede também conta como sair |
 
 Detecção via **WLAN API** (`wlanapi.dll`) por `ctypes` — sem `netsh` nem dependências extras.
 

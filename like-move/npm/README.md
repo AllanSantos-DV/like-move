@@ -18,7 +18,7 @@ npx like-move home-awake
 
 Instala em `%LOCALAPPDATA%\Programs\like-move\home-awake` e roda o passo 1, o diagnóstico (somente leitura). Os passos seguintes estão no `LEIA-ME.txt` da pasta.
 
-Para só ver o que bloqueia a tela no seu Windows (e qual limite vence primeiro), sem abrir o app e sem alterar nada:
+Para só ver o que bloqueia a tela no seu Windows (e qual limite vence primeiro), sem abrir o app e sem alterar nenhuma configuração do Windows (ele baixa os scripts do Home Awake para a pasta acima e espera uma tecla ao final):
 
 ```
 npx like-move diagnose

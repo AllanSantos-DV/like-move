@@ -9,7 +9,7 @@ import datetime as dt
 
 def deadline_after(minutes: int, now: dt.datetime) -> float:
     """Instante (epoch) em que termina um prazo de ``minutes`` minutos contados a partir de ``now``."""
-    return (now + dt.timedelta(minutes=minutes)).timestamp()
+    return now.timestamp() + minutes * 60
 
 
 def deadline_until(hour: int, minute: int, now: dt.datetime) -> float:

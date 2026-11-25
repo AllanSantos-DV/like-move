@@ -38,6 +38,10 @@ def decide(st, idle=0.0, kvm=False, trusted=False, locked=False, on_ac=True, tim
 class TimerTest(unittest.TestCase):
     NOW = dt.datetime(2026, 11, 25, 15, 0, 0)
 
+    def test_status_while_waiting_in_kvm_mode_does_not_mention_idle_seconds(self):
+        st = state(trigger_mode=TriggerMode.KVM)
+        self.assertEqual(awake.status_text(awake.REASON_WAITING, st, idle_seconds=0), "Aguardando: dispositivo monitorado conectado")
+
     def test_deadline_after_minutes(self):
         self.assertEqual(timer.deadline_after(60, self.NOW), self.NOW.timestamp() + 3600)
 
@@ -193,6 +197,43 @@ class MonitorUpdateTest(unittest.TestCase):
         st.save.assert_called()
         self.m["set_keep_awake"].assert_not_called()
 
+    def test_deadline_expired_while_closed_is_cleared_without_a_toast(self):
+        st, mon = self.monitor(awake_until=100.0)
+        with mock.patch.object(awake.time, "time", return_value=200.0):
+            mon._update()
+        mon.notifier.assert_not_called()
+
+    def test_deadline_expiring_while_running_toasts_once(self):
+        st, mon = self.monitor(awake_until=100.0)
+        mon._first_tick = False
+        with mock.patch.object(awake.time, "time", return_value=200.0):
+            mon._update()
+        mon.notifier.assert_called_once()
+
+    def test_a_deadline_set_during_the_tick_is_not_wiped(self):
+        class Racing(SimpleNamespace):
+            reads = 0
+
+            @property
+            def awake_until(self):
+                Racing.reads += 1
+                return 100.0 if Racing.reads == 1 else 5000.0
+
+            @awake_until.setter
+            def awake_until(self, value):
+                self.written = value
+
+        st = Racing(save=mock.Mock())
+        mon = awake.MonitorThread(st)
+        mon._timer_active(200.0)
+        self.assertFalse(hasattr(st, "written"))
+
+    def test_failing_notifier_does_not_break_the_tick(self):
+        st, mon = self.monitor(notify_transitions=True, trigger_mode=TriggerMode.ALWAYS)
+        mon.notifier.side_effect = RuntimeError("icon not ready")
+        mon._update()
+        self.m["set_keep_awake"].assert_called_with(True)
+
     def test_active_deadline_holds_the_request(self):
         st, mon = self.monitor(awake_until=1000.0)
         with mock.patch.object(awake.time, "time", return_value=500.0):
@@ -264,6 +305,13 @@ class MonitorUpdateTest(unittest.TestCase):
 
 
 class ConfigDefaultsTest(unittest.TestCase):
+    def test_corrupt_deadline_in_config_falls_back_to_no_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
+            d = os.path.join(tmp, "like-move")
+            os.makedirs(d, exist_ok=True)
+            open(os.path.join(d, "config.json"), "w", encoding="utf-8").write('{"awake_until": "amanhã"}')
+            self.assertEqual(config.JigglerState().awake_until, 0.0)
+
     def test_new_options_are_off_by_default_and_persist(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
             st = config.JigglerState()
@@ -282,6 +330,14 @@ class ConfigDefaultsTest(unittest.TestCase):
 
 
 class DiagnoseTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "o diagnóstico usa o PowerShell do Windows")
+    def test_real_run_writes_a_report_without_the_home_awake_enrollment_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = diagnose.run(out_path=os.path.join(tmp, "diagnostico.txt"))
+            text = open(out, encoding="utf-8-sig").read()
+        self.assertIn("Diagnóstico do bloqueio de tela", text)
+        self.assertNotIn("Rede de casa:", text)
+
     def test_command_imports_the_module_and_writes_the_report_to_the_given_path(self):
         cmd = diagnose.build_command(r"C:\x\HomeAwake.psm1", r"C:\x\out.txt")
         self.assertEqual(cmd[0], "powershell.exe")

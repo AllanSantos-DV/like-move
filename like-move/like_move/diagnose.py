@@ -7,6 +7,7 @@ alterado no Windows, só lido.
 import os
 import subprocess
 import sys
+from typing import Optional
 
 CREATE_NO_WINDOW = 0x08000000
 
@@ -36,14 +37,14 @@ def build_command(psm1: str, out_path: str) -> list[str]:
     script = (
         f"$ErrorActionPreference='Stop'; Import-Module {_quote(psm1)} -Force; "
         "$s = Get-LockSettings; "
-        "$r = Format-LockDiagnosis -Settings $s -Causes (Get-LockDiagnosis $s) "
-        "-Identity (Get-NetworkIdentity) -Enrolled (Get-HomeNetwork); "
-        f"$r | Set-Content -Path {_quote(out_path)} -Encoding UTF8"
+        "$r = Format-LockDiagnosis -Settings $s -Causes (Get-LockDiagnosis $s) -Identity (Get-NetworkIdentity); "
+        "($r -split '\\r?\\n') | Where-Object { $_ -notmatch '^\\s+Rede de casa:' } | "
+        f"Set-Content -Path {_quote(out_path)} -Encoding UTF8"
     )
     return ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]
 
 
-def run(psm1: str | None = None, out_path: str | None = None, timeout: int = 60) -> str:
+def run(psm1: Optional[str] = None, out_path: Optional[str] = None, timeout: int = 60) -> str:
     """Gera o relatório e devolve o caminho do arquivo.
 
     Levanta ``FileNotFoundError`` se o módulo não existe e ``RuntimeError`` (com o erro do PowerShell) se a
