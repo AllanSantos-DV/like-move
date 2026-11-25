@@ -82,7 +82,7 @@ class TrayFeaturesTest(unittest.TestCase):
 
     def test_new_toggles_are_off_by_default_in_the_menu(self):
         items = self.top_items()
-        for name in ("Só na tomada", "Avisar nas mudanças"):
+        for name in ("Só na tomada", "Tela pode apagar", "Avisar nas mudanças"):
             self.assertIn(name, items)
             self.assertFalse(items[name].checked)
 
@@ -124,6 +124,7 @@ class TrayFeaturesTest(unittest.TestCase):
         for handler, field in (
             (self.app._on_toggle_ac_only, "ac_only"),
             (self.app._on_toggle_lock_on_untrusted, "lock_on_untrusted"),
+            (self.app._on_toggle_display_may_sleep, "display_may_sleep"),
             (self.app._on_toggle_notify_transitions, "notify_transitions"),
         ):
             handler(self.app._icon, None)

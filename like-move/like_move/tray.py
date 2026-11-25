@@ -173,6 +173,9 @@ class TrayApp:
     def _on_toggle_ac_only(self, icon: Icon, item: MenuItem) -> None:
         self._toggle_option("ac_only", "Só na tomada")
 
+    def _on_toggle_display_may_sleep(self, icon: Icon, item: MenuItem) -> None:
+        self._toggle_option("display_may_sleep", "Tela pode apagar")
+
     def _on_toggle_lock_on_untrusted(self, icon: Icon, item: MenuItem) -> None:
         self._toggle_option("lock_on_untrusted", "Bloquear a tela ao sair da rede")
 
@@ -643,6 +646,11 @@ class TrayApp:
                 "Só na tomada",
                 self._on_toggle_ac_only,
                 checked=lambda item: self._state.ac_only,
+            ),
+            MenuItem(
+                "Tela pode apagar",
+                self._on_toggle_display_may_sleep,
+                checked=lambda item: self._state.display_may_sleep,
             ),
             MenuItem(
                 "Avisar nas mudanças",

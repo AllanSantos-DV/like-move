@@ -37,6 +37,7 @@ DEFAULTS: dict[str, Any] = {
     # Funções opcionais (todas desligadas por padrão)
     "ac_only": False,
     "lock_on_untrusted": False,
+    "display_may_sleep": False,
     "notify_transitions": False,
     "awake_until": 0.0,
 }

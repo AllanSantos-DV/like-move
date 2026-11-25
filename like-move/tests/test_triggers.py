@@ -150,7 +150,7 @@ class MonitorTriggersTest(unittest.TestCase):
         self.m["set_keep_awake"].assert_not_called()
         self.m["running_process_names"].return_value = {"blender.exe"}
         mon._update()
-        self.m["set_keep_awake"].assert_called_once_with(True)
+        self.m["set_keep_awake"].assert_called_once_with(True, True)
         self.assertEqual(mon.status, "Acordado agora: programa em execução")
 
     def test_process_list_is_not_read_when_nothing_is_watched(self):
@@ -180,7 +180,7 @@ class MonitorTriggersTest(unittest.TestCase):
             mon._update()
         self.m["set_keep_awake"].assert_not_called()
         mon._update()
-        self.m["set_keep_awake"].assert_called_once_with(True)
+        self.m["set_keep_awake"].assert_called_once_with(True, True)
         self.assertEqual(mon.status, "Acordado agora: CPU alta")
 
     def test_cpu_is_not_sampled_when_the_option_is_off(self):

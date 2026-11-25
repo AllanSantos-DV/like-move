@@ -85,6 +85,7 @@ class JigglerState:
         # Funções opcionais: todas desligadas por padrão
         self.ac_only: bool = bool(data.get("ac_only", False))
         self.lock_on_untrusted: bool = bool(data.get("lock_on_untrusted", False))
+        self.display_may_sleep: bool = bool(data.get("display_may_sleep", False))
         self.notify_transitions: bool = bool(data.get("notify_transitions", False))
         self.watched_processes: list[str] = _clean_process_list(data.get("watched_processes"))
         self.cpu_threshold: int = _clean_cpu_threshold(data.get("cpu_threshold"))
@@ -108,6 +109,7 @@ class JigglerState:
             "check_updates_on_start": self.check_updates_on_start,
             "ac_only": self.ac_only,
             "lock_on_untrusted": self.lock_on_untrusted,
+            "display_may_sleep": self.display_may_sleep,
             "notify_transitions": self.notify_transitions,
             "awake_until": self.awake_until,
             "watched_processes": self.watched_processes,

@@ -36,7 +36,7 @@
 - **🖥️ Programas vigiados** — mantém acordado enquanto um programa que você escolher estiver aberto (um render, um build, um download), sem lembrar de ligar o "Sempre"
 - **📈 CPU ocupada** — mantém acordado enquanto o processador fica acima de 25%, 50% ou 75%, mesmo sem teclado nem mouse
 - **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
-- **🔋 Só na tomada** e **🔐 bloquear a tela ao sair da rede confiável** — opções que vêm desligadas
+- **🔋 Só na tomada**, **🔐 bloquear a tela ao sair da rede confiável** e **🌙 tela pode apagar** — opções que vêm desligadas
 - **🩺 Diagnosticar bloqueio** — mostra o que bloqueia a tela no seu Windows e qual limite vence primeiro (somente leitura)
 - **Sem simular entrada** — pede ao Windows "tela e sistema ligados" (`SetThreadExecutionState`); nada de mouse ou teclado falso
 - **🔄 Auto-update** — verifica novas releases no GitHub e instala a nova versão ao lado da atual
@@ -126,6 +126,7 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 | **CPU ocupada →** | Desligado (padrão) ou acima de 25%, 50% ou 75% de uso do processador. Liga depois de cerca de 5 s seguidos acima do limite e só solta depois de cerca de 30 s abaixo, para um trabalho com pausas curtas não ligar e desligar o pedido (status "Acordado agora: CPU alta") |
 | **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis, liga "Só em redes confiáveis" e "Bloquear a tela ao sair da rede" |
 | **Só na tomada** | Não mantém acordado enquanto o notebook está na bateria (desligado por padrão) |
+| **Tela pode apagar** | O like-move só impede o PC de suspender (`ES_SYSTEM_REQUIRED`) e deixa a tela apagar pelo tempo do Windows; sem ele, a tela também fica ligada. Vale para todos os modos e gatilhos, e trocar a opção com o PC já acordado refaz o pedido na hora (desligado por padrão) |
 | **Avisar nas mudanças** | Mostra um aviso quando o like-move passa a manter ou a soltar o PC (desligado por padrão) |
 | **Diagnosticar bloqueio** | Lê (sem alterar nada) o que bloqueia a tela e abre o relatório `diagnostico.txt` de `%APPDATA%\like-move` |
 | **Iniciar com Windows** | Inicia o like-move junto com o Windows (sem admin) |

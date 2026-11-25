@@ -59,9 +59,14 @@ class Decision(NamedTuple):
     reason: str
 
 
-def set_keep_awake(on: bool) -> None:
-    """Liga/desliga o pedido de tela e sistema ligados para a thread atual."""
-    flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED if on else ES_CONTINUOUS
+def required_bits(display: bool) -> int:
+    """Bits do pedido de energia: sempre o sistema, e a tela a menos que ela possa apagar."""
+    return ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED if display else ES_SYSTEM_REQUIRED
+
+
+def set_keep_awake(on: bool, display: bool = True) -> None:
+    """Liga/desliga o pedido de energia da thread atual; ``display=False`` deixa a tela apagar."""
+    flags = ES_CONTINUOUS | required_bits(display) if on else ES_CONTINUOUS
     if _kernel32.SetThreadExecutionState(flags) == 0:
         raise OSError("SetThreadExecutionState falhou")
 
@@ -146,15 +151,15 @@ def should_lock_on_leave(state: JigglerState, *, was_trusted: bool, trusted: boo
     )
 
 
-def request_lost(holding: bool, execution_state: Optional[int]) -> bool:
-    """True se o app acredita manter o pedido mas o sistema não mostra os bits de tela e sistema.
+def request_lost(holding: bool, execution_state: Optional[int], display: bool = True) -> bool:
+    """True se o app acredita manter o pedido mas o sistema não mostra os bits pedidos.
 
-    O estado do sistema soma os pedidos de todos os programas: com o nosso ativo os dois bits têm de
-    estar ligados. Estado ilegível (``None``) não é prova de perda.
+    O estado do sistema soma os pedidos de todos os programas: com o nosso ativo os bits de
+    ``required_bits(display)`` têm de estar ligados. Estado ilegível (``None``) não é prova de perda.
     """
     if not holding or execution_state is None:
         return False
-    wanted_bits = ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+    wanted_bits = required_bits(display)
     return execution_state & wanted_bits != wanted_bits
 
 
@@ -170,6 +175,7 @@ class MonitorThread(threading.Thread):
         self._stop_event = threading.Event()
         self._device_monitor: Optional[DeviceMonitor] = None
         self._awake = False
+        self._held_display = True
         self._was_trusted = False
         self._untrusted_ticks = 0
         self._loss_reported = False
@@ -312,14 +318,14 @@ class MonitorThread(threading.Thread):
             self._state_read_failed = True
             return
         self._state_read_failed = False
-        if not request_lost(self._awake, execution_state):
+        if not request_lost(self._awake, execution_state, self._held_display):
             self._loss_reported = False
             return
         if self._loss_reported:
             return
         self._loss_reported = True
         logger.warning("Pedido de energia perdido (estado do sistema 0x%X); reafirmando", execution_state)
-        set_keep_awake(True)
+        set_keep_awake(True, self._held_display)
 
     def _update(self) -> None:
         state = self._state
@@ -341,13 +347,20 @@ class MonitorThread(threading.Thread):
         )
         self.status = status_text(decision.reason, state, idle_seconds=idle_seconds)
         wanted = decision.wanted
+        display = not state.display_may_sleep
         if wanted != self._awake:
-            set_keep_awake(wanted)
+            set_keep_awake(wanted, display)
             self._awake = wanted
+            self._held_display = display
             self._loss_reported = False
             logger.info("Manter acordado: %s (modo=%s)", "sim" if wanted else "não", state.trigger_mode.value)
             if state.notify_transitions:
                 self._notify(self.status)
+        elif self._awake and display != self._held_display:
+            set_keep_awake(True, display)
+            self._held_display = display
+            self._loss_reported = False
+            logger.info("Pedido de energia refeito: tela %s", "ligada" if display else "pode apagar")
         elif self._awake:
             self._verify_request()
         self._lock_if_left_trusted(on_trusted, locked)

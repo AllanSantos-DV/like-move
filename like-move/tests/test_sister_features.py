@@ -20,7 +20,7 @@ from like_move.config import TriggerMode  # noqa: E402
 def state(**kw):
     base = dict(
         enabled=True, trusted_only=False, trigger_mode=TriggerMode.IDLE, idle_threshold=30,
-        ac_only=False, lock_on_untrusted=False, awake_until=0.0, notify_transitions=False,
+        ac_only=False, lock_on_untrusted=False, display_may_sleep=False, awake_until=0.0, notify_transitions=False,
         trusted_networks=[{"ssid": "casa", "bssid": ""}], watched_processes=[], cpu_threshold=0,
     )
     base.update(kw)
@@ -232,7 +232,7 @@ class MonitorUpdateTest(unittest.TestCase):
         st, mon = self.monitor(notify_transitions=True, trigger_mode=TriggerMode.ALWAYS)
         mon.notifier.side_effect = RuntimeError("icon not ready")
         mon._update()
-        self.m["set_keep_awake"].assert_called_with(True)
+        self.m["set_keep_awake"].assert_called_with(True, True)
 
     def test_deadline_within_two_minutes_warns_once_and_keeps_holding(self):
         st, mon = self.monitor(awake_until=1000.0)
@@ -242,7 +242,7 @@ class MonitorUpdateTest(unittest.TestCase):
             mon._update()
         mon.notifier.assert_called_once()
         self.assertIn("prorrogar", mon.notifier.call_args[0][0])
-        self.m["set_keep_awake"].assert_called_once_with(True)
+        self.m["set_keep_awake"].assert_called_once_with(True, True)
 
     def test_deadline_warning_is_logged(self):
         st, mon = self.monitor(awake_until=1000.0)
@@ -271,7 +271,7 @@ class MonitorUpdateTest(unittest.TestCase):
         st, mon = self.monitor(awake_until=1000.0)
         with mock.patch.object(awake.time, "time", return_value=500.0):
             mon._update()
-        self.m["set_keep_awake"].assert_called_once_with(True)
+        self.m["set_keep_awake"].assert_called_once_with(True, True)
         self.assertEqual(mon.status, "Acordado agora: prazo")
 
     def test_lock_fires_once_after_debounce_when_leaving_trusted_network(self):
@@ -312,7 +312,7 @@ class MonitorUpdateTest(unittest.TestCase):
         with self.assertLogs(awake.logger, level="WARNING") as logs:
             mon._update()
             mon._update()
-        self.m["set_keep_awake"].assert_called_once_with(True)
+        self.m["set_keep_awake"].assert_called_once_with(True, True)
         self.assertEqual(len([r for r in logs.records if "perdido" in r.getMessage()]), 1)
 
     def test_unreadable_execution_state_is_logged_not_swallowed(self):
