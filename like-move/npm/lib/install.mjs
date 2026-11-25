@@ -162,12 +162,12 @@ export function runHomeAwakeDiagnosis(dir) {
   if (r.status !== 0) throw new Error(`1-diagnosticar.cmd terminou com código ${r.status}`);
 }
 
-/** Argumentos: [home-awake] [--dir <pasta>] [--no-start] [--help]. Desconhecido = erro. */
+/** Argumentos: [home-awake|diagnose] [--dir <pasta>] [--no-start] [--help]. Desconhecido = erro. */
 export function parseArgs(argv) {
   const opts = { target: "app", dir: null, start: true, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "home-awake" && opts.target === "app") opts.target = "home-awake";
+    if ((a === "home-awake" || a === "diagnose") && opts.target === "app") opts.target = a;
     else if (a === "--dir") {
       if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error("--dir precisa de uma pasta");
       opts.dir = argv[++i];
@@ -175,5 +175,6 @@ export function parseArgs(argv) {
     else if (a === "--help" || a === "-h") opts.help = true;
     else throw new Error(`argumento desconhecido: ${a}`);
   }
+  if (opts.target === "diagnose" && !opts.start) throw new Error("diagnose não combina com --no-start");
   return opts;
 }

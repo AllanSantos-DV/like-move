@@ -19,7 +19,7 @@ from like_move.config import TriggerMode  # noqa: E402
 
 
 def state(**kw):
-    base = dict(enabled=True, trusted_only=False, trigger_mode=TriggerMode.IDLE, idle_threshold=30)
+    base = dict(enabled=True, trusted_only=False, trigger_mode=TriggerMode.IDLE, idle_threshold=30, ac_only=False)
     base.update(kw)
     return SimpleNamespace(**base)
 

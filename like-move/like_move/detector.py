@@ -100,3 +100,57 @@ def is_screen_locked() -> bool:
         logger.warning("CloseDesktop falhou", exc_info=True)
 
     return False
+
+
+class SYSTEM_POWER_STATUS(ctypes.Structure):
+    """Estrutura SYSTEM_POWER_STATUS de GetSystemPowerStatus."""
+
+    _fields_ = [
+        ("ACLineStatus", ctypes.c_ubyte),
+        ("BatteryFlag", ctypes.c_ubyte),
+        ("BatteryLifePercent", ctypes.c_ubyte),
+        ("SystemStatusFlag", ctypes.c_ubyte),
+        ("BatteryLifeTime", ctypes.c_ulong),
+        ("BatteryFullLifeTime", ctypes.c_ulong),
+    ]
+
+
+kernel32.GetSystemPowerStatus.argtypes = [ctypes.POINTER(SYSTEM_POWER_STATUS)]
+kernel32.GetSystemPowerStatus.restype = ctypes.wintypes.BOOL
+
+user32.LockWorkStation.argtypes = []
+user32.LockWorkStation.restype = ctypes.wintypes.BOOL
+
+_powrprof = ctypes.WinDLL("powrprof")
+_powrprof.CallNtPowerInformation.argtypes = [
+    ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_ulong,
+]
+_powrprof.CallNtPowerInformation.restype = ctypes.c_long
+
+_AC_OFFLINE = 0
+_SYSTEM_EXECUTION_STATE = 16
+
+
+def is_on_ac_power() -> bool:
+    """True se o PC está na tomada. Status desconhecido (255) conta como tomada: desktops não têm bateria."""
+    status = SYSTEM_POWER_STATUS()
+    if not kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+        raise OSError(f"GetSystemPowerStatus falhou (erro {ctypes.GetLastError()})")
+    return status.ACLineStatus != _AC_OFFLINE
+
+
+def lock_workstation() -> None:
+    """Bloqueia a tela do usuário (equivale a Win+L)."""
+    if not user32.LockWorkStation():
+        raise OSError(f"LockWorkStation falhou (erro {ctypes.GetLastError()})")
+
+
+def get_execution_state() -> int:
+    """Flags ES_* em vigor no sistema todo (soma dos pedidos de todos os programas), sem administrador."""
+    state = ctypes.c_ulong(0)
+    rc = _powrprof.CallNtPowerInformation(
+        _SYSTEM_EXECUTION_STATE, None, 0, ctypes.byref(state), ctypes.sizeof(state),
+    )
+    if rc != 0:
+        raise OSError(f"CallNtPowerInformation retornou 0x{rc & 0xFFFFFFFF:X}")
+    return state.value

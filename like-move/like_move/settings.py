@@ -34,6 +34,11 @@ DEFAULTS: dict[str, Any] = {
     "trusted_networks": [],  # lista de {"ssid": str, "bssid": str}
     # Auto-update
     "check_updates_on_start": True,
+    # Funções opcionais (todas desligadas por padrão)
+    "ac_only": False,
+    "lock_on_untrusted": False,
+    "notify_transitions": False,
+    "awake_until": 0.0,
 }
 
 _lock = threading.Lock()

@@ -32,6 +32,10 @@
 
 - **4 modos de trigger**: Inatividade, KVM (event-driven), Ambos ou Sempre
 - **🔒 Redes Wi-Fi confiáveis** — mantém a tela acordada só em redes que você confia (casa/trabalho); em Wi-Fi público deixa bloquear. Casa por SSID **+ BSSID** (anti *evil-twin*)
+- **⏱️ Prazo** — "Manter acordado por…" (30 min, 1 h, 2 h, 4 h ou até 12:00/18:00/22:00): no fim volta sozinho ao modo escolhido
+- **Status ao vivo** — a primeira linha do menu diz por que o PC está (ou não) acordado, e avisos opcionais nas mudanças
+- **🔋 Só na tomada** e **🔐 bloquear a tela ao sair da rede confiável** — opções que vêm desligadas
+- **🩺 Diagnosticar bloqueio** — mostra o que bloqueia a tela no seu Windows e qual limite vence primeiro (somente leitura)
 - **Sem simular entrada** — pede ao Windows "tela e sistema ligados" (`SetThreadExecutionState`); nada de mouse ou teclado falso
 - **🔄 Auto-update** — verifica novas releases no GitHub e instala a nova versão ao lado da atual
 - **Detecção de KVM via eventos do Windows** — usa `WM_DEVICECHANGE` (event-driven, sem polling)
@@ -110,11 +114,16 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 
 | Opção | Descrição |
 |-------|-----------|
+| *(primeira linha)* | Status ao vivo: "Acordado agora: KVM", "Aguardando: faltam 18s", "Parado: fora de rede confiável"… |
 | **Ativo** | Liga/desliga o like-move (checkbox) |
 | **Modo →** | Seleciona modo de trigger (Inatividade, KVM, Ambos, Sempre) |
 | **Dispositivos KVM →** | Seleciona quais dispositivos monitorar (visível nos modos KVM/Ambos) |
 | **Threshold →** | Tempo de inatividade antes de manter acordado (15s, 30s, 1min, 2min, 5min) |
-| **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis e liga "Só em redes confiáveis" |
+| **Manter acordado por… →** | Mantém acordado por 30 min, 1 h, 2 h, 4 h ou até 12:00, 18:00 ou 22:00 e volta ao modo escolhido no fim; "Cancelar prazo" aparece enquanto há prazo |
+| **Redes confiáveis →** | Marca/remove redes Wi-Fi confiáveis, liga "Só em redes confiáveis" e "Bloquear a tela ao sair da rede" |
+| **Só na tomada** | Não mantém acordado enquanto o notebook está na bateria (desligado por padrão) |
+| **Avisar nas mudanças** | Mostra um aviso quando o like-move passa a manter ou a soltar o PC (desligado por padrão) |
+| **Diagnosticar bloqueio** | Lê (sem alterar nada) o que bloqueia a tela e abre o relatório `diagnostico.txt` de `%APPDATA%\like-move` |
 | **Iniciar com Windows** | Inicia o like-move junto com o Windows (sem admin) |
 | **Verificar atualizações** | Procura uma versão mais nova nas releases do GitHub |
 | **Sobre** | Informações do app e link do repositório |
@@ -162,6 +171,7 @@ Deixar a tela bloquear é uma medida de segurança. Manter a máquina acordada e
 | **Remover rede atual da lista** | Remove o Wi-Fi atual (visível se estiver na lista) |
 | **Esquecer todas as redes** | Limpa a lista de confiáveis |
 | **Só em redes confiáveis** | Liga o gate: age apenas em redes confiáveis |
+| **Bloquear a tela ao sair da rede** | Desligado por padrão. Quando o PC deixa uma rede confiável (cinco leituras seguidas, para um soluço do Wi-Fi não bloquear), bloqueia a tela na hora, sem esperar o limite do Windows. Só age depois de ter estado numa rede confiável e com ao menos uma rede salva |
 
 Detecção via **WLAN API** (`wlanapi.dll`) por `ctypes` — sem `netsh` nem dependências extras.
 
@@ -187,7 +197,7 @@ Os valores padrão estão em `like_move/config.py`:
 | `IDLE_THRESHOLD_SECONDS` | 30 | Segundos de inatividade antes de manter acordado |
 | `CHECK_INTERVAL_SECONDS` | 1 | Intervalo de checagem do estado |
 
-As preferências alteradas pelo menu (modo, threshold, dispositivos, redes confiáveis, auto-update) são **persistidas** em `%APPDATA%\like-move\config.json` e recarregadas na próxima execução. O `.exe` grava o registro de execução em `%APPDATA%\like-move\like-move.log` (até 1 MB, mais uma cópia anterior).
+As preferências alteradas pelo menu (modo, threshold, dispositivos, redes confiáveis, prazo, tomada, avisos, auto-update) são **persistidas** em `%APPDATA%\like-move\config.json` e recarregadas na próxima execução. O `.exe` grava o registro de execução em `%APPDATA%\like-move\like-move.log` (até 1 MB, mais uma cópia anterior).
 
 ---
 
@@ -215,13 +225,17 @@ like_move/
 ├── detector.py           → Detecção de idle e tela bloqueada (ctypes)
 ├── device_monitor.py     → Monitor de dispositivos event-driven (WM_DEVICECHANGE)
 ├── wifi.py               → Rede Wi-Fi atual (SSID+BSSID) via WLAN API + gate de confiança
-├── awake.py              → Decide quando manter acordado (SetThreadExecutionState) + thread de monitoramento
+├── awake.py              → Decide quando manter acordado (SetThreadExecutionState) + thread de monitoramento, status, bloqueio ao sair da rede e vigia do pedido
+├── timer.py              → Prazo ("manter acordado por…"): fim e texto do tempo restante
+├── diagnose.py           → Diagnóstico de bloqueio (lê as configurações pelo HomeAwake.psm1, somente leitura)
 ├── updater.py            → Auto-update via GitHub Releases (nova versão numa pasta ao lado)
 ├── tray.py               → System tray icon com pystray + menu configurável
 ├── splash.py             → Splash screen com fade (Win32 layered window)
 ├── about.py              → Janela "Sobre" (Win32 layered window)
 └── startup.py            → Iniciar com Windows via registro HKCU (sem admin)
 ```
+
+O monitor também confere, a cada ciclo em que mantém o pedido, se o sistema ainda mostra os bits de tela e sistema ligados (`CallNtPowerInformation`, estado de execução do sistema): se o pedido sumiu (por exemplo, no Modern Standby com bateria), registra um aviso no log e o reafirma uma vez. Como o estado soma os pedidos de todos os programas, ele só acusa perda quando nenhum programa mantém a tela; se outro programa a mantém, a perda do nosso pedido não aparece.
 
 **Threads:**
 - **Principal** — event loop do pystray (system tray)

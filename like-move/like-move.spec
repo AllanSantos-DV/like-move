@@ -47,6 +47,7 @@ a = Analysis(
     datas=[
         ('assets/like-move.ico', 'assets'),
         ('VERSION', '.'),
+        ('home-awake/HomeAwake.psm1', 'home-awake'),
     ],
     hiddenimports=pystray_hiddenimports + pil_hiddenimports + app_hiddenimports,
     hookspath=[],

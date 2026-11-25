@@ -1,6 +1,8 @@
 """System tray icon com pystray para controle do like-move."""
 
+import datetime as dt
 import logging
+import os
 from typing import Any, Optional
 
 from PIL import Image, ImageDraw
@@ -12,12 +14,16 @@ from .config import JigglerState, TriggerMode
 from .device_monitor import DeviceMonitor
 from .awake import MonitorThread
 from .wifi import get_current_connection
-from . import updater
+from . import diagnose, timer, updater
 
 logger = logging.getLogger(__name__)
 
 # Thresholds disponíveis no menu (segundos)
 THRESHOLD_OPTIONS: list[int] = [15, 30, 60, 120, 300]
+
+# Prazos do menu "Manter acordado por…": minutos e horários do relógio
+TIMER_MINUTES: list[tuple[int, str]] = [(30, "30 min"), (60, "1 hora"), (120, "2 horas"), (240, "4 horas")]
+TIMER_CLOCK_TIMES: list[tuple[int, int]] = [(12, 0), (18, 0), (22, 0)]
 
 # Mapping: TriggerMode → display label
 _MODE_LABELS: dict[TriggerMode, str] = {
@@ -64,6 +70,10 @@ def create_icon_image(enabled: bool = True) -> Image.Image:
     return image
 
 
+def _now() -> dt.datetime:
+    return dt.datetime.now()
+
+
 def _format_threshold(seconds: int) -> str:
     """Formata threshold para exibição no menu."""
     if seconds < 60:
@@ -80,6 +90,7 @@ class TrayApp:
         self._device_monitor: Optional[DeviceMonitor] = None
         self._icon: Optional[Icon] = None
         self._pending_update: Optional["updater.UpdateInfo"] = None
+        self._open_file = os.startfile  # type: ignore[attr-defined]
 
     def _on_toggle(self, icon: Icon, item: MenuItem) -> None:
         """Alterna entre ativado/desativado."""
@@ -91,6 +102,83 @@ class TrayApp:
         if self._icon:
             self._icon.icon = create_icon_image(self._state.enabled)
         self._state.save()
+
+    def _status_text(self, item: MenuItem) -> str:
+        """Linha de status (dinâmica): o que o monitor decidiu no último ciclo."""
+        monitor = self._monitor
+        return (monitor.status if monitor and monitor.status else "like-move")
+
+    def _start_timer(self, deadline: float) -> None:
+        """Grava o prazo, liga o like-move (o usuário pediu) e avisa até quando."""
+        self._state.awake_until = deadline
+        self._state.enabled = True
+        self._state.save()
+        until = dt.datetime.fromtimestamp(deadline).strftime("%H:%M")
+        logger.info("Prazo para manter acordado até %s", until)
+        if self._icon:
+            self._icon.icon = create_icon_image(True)
+            self._icon.notify(f"Mantendo acordado até {until}.", "like-move")
+            self._icon.update_menu()
+
+    def _on_set_timer_minutes(self, minutes: int) -> Any:
+        """Retorna callback que mantém acordado por ``minutes`` minutos."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._start_timer(timer.deadline_after(minutes, _now()))
+        return handler
+
+    def _on_set_timer_until(self, hour: int, minute: int) -> Any:
+        """Retorna callback que mantém acordado até a próxima ocorrência de ``hour:minute``."""
+        def handler(icon: Icon, item: MenuItem) -> None:
+            self._start_timer(timer.deadline_until(hour, minute, _now()))
+        return handler
+
+    def _on_cancel_timer(self, icon: Icon, item: MenuItem) -> None:
+        """Cancela o prazo: volta a valer só o modo escolhido."""
+        self._state.awake_until = 0.0
+        self._state.save()
+        logger.info("Prazo para manter acordado cancelado")
+        if self._icon:
+            self._icon.update_menu()
+
+    def _is_timer_active(self, item: MenuItem) -> bool:
+        return timer.is_active(self._state.awake_until, _now().timestamp())
+
+    def _timer_header_text(self, item: MenuItem) -> str:
+        left = timer.remaining_text(self._state.awake_until, _now().timestamp())
+        return f"Prazo: faltam {left}"
+
+    def _toggle_option(self, field: str, label: str) -> None:
+        """Inverte uma opção booleana do estado, salva e atualiza o menu."""
+        value = not getattr(self._state, field)
+        setattr(self._state, field, value)
+        self._state.save()
+        logger.info("%s: %s", label, "ativado" if value else "desativado")
+        if self._icon:
+            self._icon.update_menu()
+
+    def _on_toggle_ac_only(self, icon: Icon, item: MenuItem) -> None:
+        self._toggle_option("ac_only", "Só na tomada")
+
+    def _on_toggle_lock_on_untrusted(self, icon: Icon, item: MenuItem) -> None:
+        self._toggle_option("lock_on_untrusted", "Bloquear a tela ao sair da rede")
+
+    def _on_toggle_notify_transitions(self, icon: Icon, item: MenuItem) -> None:
+        self._toggle_option("notify_transitions", "Avisar nas mudanças")
+
+    def _on_diagnose(self, icon: Icon, item: MenuItem) -> None:
+        """Roda o diagnóstico de bloqueio (somente leitura) em segundo plano e abre o relatório."""
+        def worker() -> None:
+            try:
+                path = diagnose.run()
+            except Exception as exc:
+                logger.error("Diagnóstico de bloqueio falhou", exc_info=True)
+                if self._icon:
+                    self._icon.notify(f"Diagnóstico falhou: {exc}", "like-move")
+                return
+            logger.info("Diagnóstico de bloqueio gravado em %s", path)
+            self._open_file(path)
+
+        threading.Thread(target=worker, daemon=True, name="like-move-diagnose").start()
 
     def _on_set_threshold(self, seconds: int) -> Any:
         """Retorna callback para definir threshold específico."""
@@ -418,9 +506,29 @@ class TrayApp:
                 self._on_toggle_trusted_only,
                 checked=self._is_trusted_only_checked,
             ),
+            MenuItem(
+                "Bloquear a tela ao sair da rede",
+                self._on_toggle_lock_on_untrusted,
+                checked=lambda item: self._state.lock_on_untrusted,
+            ),
+        ]
+
+        timer_items = [
+            MenuItem(self._timer_header_text, None, enabled=False, visible=self._is_timer_active),
+            *[
+                MenuItem(label, self._on_set_timer_minutes(minutes))
+                for minutes, label in TIMER_MINUTES
+            ],
+            *[
+                MenuItem(f"Até {h:02d}:{m:02d}", self._on_set_timer_until(h, m))
+                for h, m in TIMER_CLOCK_TIMES
+            ],
+            MenuItem("Cancelar prazo", self._on_cancel_timer, visible=self._is_timer_active),
         ]
 
         return Menu(
+            MenuItem(self._status_text, None, enabled=False),
+            Menu.SEPARATOR,
             MenuItem(
                 "Ativo",
                 self._on_toggle,
@@ -435,7 +543,19 @@ class TrayApp:
                 in (TriggerMode.KVM, TriggerMode.BOTH),
             ),
             MenuItem("Threshold", Menu(*threshold_items)),
+            MenuItem("Manter acordado por…", Menu(*timer_items)),
             MenuItem("Redes confiáveis", Menu(*trusted_items)),
+            MenuItem(
+                "Só na tomada",
+                self._on_toggle_ac_only,
+                checked=lambda item: self._state.ac_only,
+            ),
+            MenuItem(
+                "Avisar nas mudanças",
+                self._on_toggle_notify_transitions,
+                checked=lambda item: self._state.notify_transitions,
+            ),
+            MenuItem("Diagnosticar bloqueio", self._on_diagnose),
             Menu.SEPARATOR,
             MenuItem(
                 "Iniciar com Windows",
@@ -466,6 +586,7 @@ class TrayApp:
         icon.visible = True
 
         self._monitor = MonitorThread(self._state)
+        self._monitor.notifier = lambda message: icon.notify(message, "like-move")
         self._monitor.start()
         self._ensure_device_monitor()
 

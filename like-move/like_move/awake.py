@@ -9,10 +9,13 @@ Windows o descarta quando o processo termina.
 import ctypes
 import logging
 import threading
-from typing import Optional
+import time
+from typing import Callable, NamedTuple, Optional
 
 from .config import CHECK_INTERVAL_SECONDS, JigglerState, TriggerMode
-from .detector import get_idle_time_ms, is_screen_locked
+from .detector import (
+    get_execution_state, get_idle_time_ms, is_on_ac_power, is_screen_locked, lock_workstation,
+)
 from .device_monitor import DeviceMonitor
 from .wifi import is_on_trusted_network
 
@@ -22,9 +25,31 @@ ES_CONTINUOUS: int = 0x80000000
 ES_SYSTEM_REQUIRED: int = 0x00000001
 ES_DISPLAY_REQUIRED: int = 0x00000002
 
+# Leituras seguidas fora da rede confiável antes de bloquear a tela: um soluço do Wi-Fi não pode bloquear.
+LOCK_DEBOUNCE_TICKS: int = 5
+
+REASON_DISABLED = "desativado"
+REASON_LOCKED = "tela bloqueada"
+REASON_UNTRUSTED = "fora de rede confiável"
+REASON_BATTERY = "na bateria"
+REASON_TIMED = "prazo"
+REASON_ALWAYS = "Sempre"
+REASON_IDLE = "inatividade"
+REASON_KVM = "KVM"
+REASON_WAITING = "aguardando"
+
+_HOLDING_REASONS = frozenset({REASON_TIMED, REASON_ALWAYS, REASON_IDLE, REASON_KVM})
+
 _kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 _kernel32.SetThreadExecutionState.argtypes = [ctypes.c_uint]
 _kernel32.SetThreadExecutionState.restype = ctypes.c_uint
+
+
+class Decision(NamedTuple):
+    """Resultado de :func:`decide_keep_awake`: se o pedido deve estar ativo e por quê."""
+
+    wanted: bool
+    reason: str
 
 
 def set_keep_awake(on: bool) -> None:
@@ -34,6 +59,42 @@ def set_keep_awake(on: bool) -> None:
         raise OSError("SetThreadExecutionState falhou")
 
 
+def decide_keep_awake(
+    state: JigglerState,
+    *,
+    idle_seconds: float,
+    device_disconnected: bool,
+    trusted: bool,
+    locked: bool,
+    on_ac: bool = True,
+    timed: bool = False,
+) -> Decision:
+    """Decide se o pedido deve estar ativo agora e o motivo (puro, sem chamar o Windows).
+
+    As travas (desativado, tela bloqueada, rede não confiável, bateria) valem antes de qualquer modo,
+    inclusive durante um prazo.
+    """
+    if not state.enabled:
+        return Decision(False, REASON_DISABLED)
+    if locked:
+        return Decision(False, REASON_LOCKED)
+    # Gate de segurança: fora de rede confiável a tela bloqueia normalmente.
+    if state.trusted_only and not trusted:
+        return Decision(False, REASON_UNTRUSTED)
+    if state.ac_only and not on_ac:
+        return Decision(False, REASON_BATTERY)
+    if timed:
+        return Decision(True, REASON_TIMED)
+    mode = state.trigger_mode
+    if mode == TriggerMode.ALWAYS:
+        return Decision(True, REASON_ALWAYS)
+    if mode in (TriggerMode.IDLE, TriggerMode.BOTH) and idle_seconds >= state.idle_threshold:
+        return Decision(True, REASON_IDLE)
+    if mode in (TriggerMode.KVM, TriggerMode.BOTH) and device_disconnected:
+        return Decision(True, REASON_KVM)
+    return Decision(False, REASON_WAITING)
+
+
 def should_keep_awake(
     state: JigglerState,
     *,
@@ -41,23 +102,49 @@ def should_keep_awake(
     device_disconnected: bool,
     trusted: bool,
     locked: bool,
+    on_ac: bool = True,
+    timed: bool = False,
 ) -> bool:
-    """Decide se o pedido deve estar ativo agora (puro, sem chamar o Windows)."""
-    if not state.enabled or locked:
+    """Versão booleana de :func:`decide_keep_awake`."""
+    return decide_keep_awake(
+        state, idle_seconds=idle_seconds, device_disconnected=device_disconnected,
+        trusted=trusted, locked=locked, on_ac=on_ac, timed=timed,
+    ).wanted
+
+
+def status_text(reason: str, state: JigglerState, *, idle_seconds: float) -> str:
+    """Texto da linha de status do menu para o motivo da decisão atual."""
+    if reason in _HOLDING_REASONS:
+        return f"Acordado agora: {reason}"
+    if reason == REASON_WAITING:
+        return f"Aguardando: faltam {max(0, int(state.idle_threshold - idle_seconds))}s"
+    return f"Parado: {reason}"
+
+
+def should_lock_on_leave(state: JigglerState, *, was_trusted: bool, trusted: bool, locked: bool) -> bool:
+    """True quando o PC acabou de sair de uma rede confiável e o usuário pediu para bloquear a tela."""
+    return bool(
+        state.lock_on_untrusted and was_trusted and not trusted and not locked and state.trusted_networks
+    )
+
+
+def request_lost(holding: bool, execution_state: Optional[int]) -> bool:
+    """True se o app acredita manter o pedido mas o sistema não mostra os bits de tela e sistema.
+
+    O estado do sistema soma os pedidos de todos os programas: com o nosso ativo os dois bits têm de
+    estar ligados. Estado ilegível (``None``) não é prova de perda.
+    """
+    if not holding or execution_state is None:
         return False
-    # Gate de segurança: fora de rede confiável a tela bloqueia normalmente.
-    if state.trusted_only and not trusted:
-        return False
-    mode = state.trigger_mode
-    if mode == TriggerMode.ALWAYS:
-        return True
-    idle_hit = mode in (TriggerMode.IDLE, TriggerMode.BOTH) and idle_seconds >= state.idle_threshold
-    kvm_hit = mode in (TriggerMode.KVM, TriggerMode.BOTH) and device_disconnected
-    return idle_hit or kvm_hit
+    wanted_bits = ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+    return execution_state & wanted_bits != wanted_bits
 
 
 class MonitorThread(threading.Thread):
-    """Thread daemon que liga o pedido quando o modo pede e o libera quando não."""
+    """Thread daemon que liga o pedido quando o modo pede e o libera quando não.
+
+    ``status`` guarda a linha de status do menu; ``notifier`` (opcional) recebe os avisos de mudança.
+    """
 
     def __init__(self, state: JigglerState) -> None:
         super().__init__(daemon=True, name="like-move-monitor")
@@ -65,6 +152,13 @@ class MonitorThread(threading.Thread):
         self._stop_event = threading.Event()
         self._device_monitor: Optional[DeviceMonitor] = None
         self._awake = False
+        self._was_trusted = False
+        self._untrusted_ticks = 0
+        self._loss_reported = False
+        self._state_read_failed = False
+        self._ac_read_failed = False
+        self.status = ""
+        self.notifier: Optional[Callable[[str], None]] = None
 
     def stop(self) -> None:
         """Sinaliza a thread para parar graciosamente."""
@@ -88,16 +182,99 @@ class MonitorThread(threading.Thread):
             set_keep_awake(False)
             logger.info("Monitor encerrado")
 
+    def _notify(self, message: str) -> None:
+        if self.notifier:
+            self.notifier(message)
+
+    def _timer_active(self, now: float) -> bool:
+        """Prazo vigente? Um prazo vencido é apagado e salvo, e o usuário é avisado."""
+        until = self._state.awake_until
+        if not until:
+            return False
+        if now < until:
+            return True
+        self._state.awake_until = 0.0
+        self._state.save()
+        logger.info("Prazo para manter acordado terminou")
+        self._notify("Prazo terminou: voltou ao modo escolhido")
+        return False
+
+    def _read_on_ac(self) -> bool:
+        """Está na tomada? Falha de leitura é registrada uma vez e conta como tomada."""
+        try:
+            on_ac = is_on_ac_power()
+        except OSError:
+            if not self._ac_read_failed:
+                logger.warning("Não consegui ler a fonte de energia; contando como na tomada", exc_info=True)
+            self._ac_read_failed = True
+            return True
+        self._ac_read_failed = False
+        return on_ac
+
+    def _lock_if_left_trusted(self, on_trusted: bool, locked: bool) -> None:
+        """Bloqueia a tela quando a rede confiável some por ``LOCK_DEBOUNCE_TICKS`` leituras seguidas."""
+        if not self._state.lock_on_untrusted:
+            self._was_trusted = False
+            self._untrusted_ticks = 0
+            return
+        if on_trusted:
+            self._was_trusted = True
+            self._untrusted_ticks = 0
+            return
+        if not self._was_trusted:
+            return
+        self._untrusted_ticks += 1
+        if self._untrusted_ticks < LOCK_DEBOUNCE_TICKS:
+            return
+        was_trusted, self._was_trusted, self._untrusted_ticks = self._was_trusted, False, 0
+        if should_lock_on_leave(self._state, was_trusted=was_trusted, trusted=False, locked=locked):
+            logger.info("Saiu da rede confiável: bloqueando a tela")
+            lock_workstation()
+
+    def _verify_request(self) -> None:
+        """Confere no sistema se o pedido continua valendo e o reafirma uma vez se foi perdido."""
+        try:
+            execution_state = get_execution_state()
+        except OSError:
+            if not self._state_read_failed:
+                logger.warning("Não consegui ler o estado de energia do sistema", exc_info=True)
+            self._state_read_failed = True
+            return
+        self._state_read_failed = False
+        if not request_lost(self._awake, execution_state):
+            self._loss_reported = False
+            return
+        if self._loss_reported:
+            return
+        self._loss_reported = True
+        logger.warning("Pedido de energia perdido (estado do sistema 0x%X); reafirmando", execution_state)
+        set_keep_awake(True)
+
     def _update(self) -> None:
         state = self._state
-        wanted = should_keep_awake(
+        now = time.time()
+        timed = self._timer_active(now)
+        idle_seconds = get_idle_time_ms() / 1000.0
+        locked = is_screen_locked()
+        on_trusted = is_on_trusted_network(state) if (state.trusted_only or state.lock_on_untrusted) else False
+        decision = decide_keep_awake(
             state,
-            idle_seconds=get_idle_time_ms() / 1000.0,
+            idle_seconds=idle_seconds,
             device_disconnected=bool(self._device_monitor and self._device_monitor.device_disconnected),
-            trusted=state.trusted_only and is_on_trusted_network(state),
-            locked=is_screen_locked(),
+            trusted=on_trusted,
+            locked=locked,
+            on_ac=self._read_on_ac() if state.ac_only else True,
+            timed=timed,
         )
+        self.status = status_text(decision.reason, state, idle_seconds=idle_seconds)
+        wanted = decision.wanted
         if wanted != self._awake:
             set_keep_awake(wanted)
             self._awake = wanted
+            self._loss_reported = False
             logger.info("Manter acordado: %s (modo=%s)", "sim" if wanted else "não", state.trigger_mode.value)
+            if state.notify_transitions:
+                self._notify(self.status)
+        elif self._awake:
+            self._verify_request()
+        self._lock_if_left_trusted(on_trusted, locked)

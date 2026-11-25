@@ -3,16 +3,18 @@
 //
 //   npx like-move                  # baixa a release, confere o sha256, instala e abre o app
 //   npx like-move home-awake       # idem para o Home Awake e roda o 1-diagnosticar (somente leitura)
+//   npx like-move diagnose         # só mostra o que bloqueia a tela (diagnóstico do Home Awake, somente leitura)
 //   --dir <pasta>                  # instala em outra pasta (padrão: %LOCALAPPDATA%\Programs\like-move)
 //   --no-start                     # só instala
 import {
   defaultBase, installApp, installHomeAwake, isAppRunning, loadRelease, parseArgs, runHomeAwakeDiagnosis, startApp,
 } from "../lib/install.mjs";
 
-const HELP = `Uso: npx like-move [home-awake] [--dir <pasta>] [--no-start]
+const HELP = `Uso: npx like-move [home-awake|diagnose] [--dir <pasta>] [--no-start]
 
   (sem argumento)  instala o like-move e abre o app (ícone na bandeja)
   home-awake       instala o Home Awake e roda o passo 1 (diagnóstico, somente leitura)
+  diagnose         mostra o que bloqueia a tela e se o like-move impede (somente leitura, não abre o app)
   --dir <pasta>    instala em outra pasta (padrão: %LOCALAPPDATA%\\Programs\\like-move)
   --no-start       só instala, não abre
 
@@ -25,6 +27,12 @@ async function main() {
   const release = loadRelease();
   const base = opts.dir ?? defaultBase();
   console.log(`like-move ${release.version} (release ${release.tag} de github.com/AllanSantos-DV/like-move)`);
+
+  if (opts.target === "diagnose") {
+    const { dir } = await installHomeAwake({ release, base, log: () => {} });
+    runHomeAwakeDiagnosis(dir);
+    return;
+  }
 
   if (opts.target === "home-awake") {
     const { dir } = await installHomeAwake({ release, base });

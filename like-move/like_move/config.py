@@ -56,6 +56,12 @@ class JigglerState:
         # Auto-update
         self.check_updates_on_start: bool = bool(data.get("check_updates_on_start", True))
 
+        # Funções opcionais: todas desligadas por padrão
+        self.ac_only: bool = bool(data.get("ac_only", False))
+        self.lock_on_untrusted: bool = bool(data.get("lock_on_untrusted", False))
+        self.notify_transitions: bool = bool(data.get("notify_transitions", False))
+        self.awake_until: float = float(data.get("awake_until", 0.0) or 0.0)
+
     def to_dict(self) -> dict:
         """Serializa o estado para persistência (JSON-friendly)."""
         return {
@@ -68,6 +74,10 @@ class JigglerState:
             "match_bssid": self.match_bssid,
             "trusted_networks": self.trusted_networks,
             "check_updates_on_start": self.check_updates_on_start,
+            "ac_only": self.ac_only,
+            "lock_on_untrusted": self.lock_on_untrusted,
+            "notify_transitions": self.notify_transitions,
+            "awake_until": self.awake_until,
         }
 
     def save(self) -> None:

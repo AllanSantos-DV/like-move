@@ -145,6 +145,10 @@ test("argumentos", () => {
     { target: "home-awake", dir: "C:\\x", start: false, help: false });
   assert.throws(() => parseArgs(["--dir"]), /precisa de uma pasta/);
   assert.throws(() => parseArgs(["--force"]), /desconhecido/);
+  assert.deepEqual(parseArgs(["diagnose", "--dir", "C:\\x"]),
+    { target: "diagnose", dir: "C:\\x", start: true, help: false });
+  assert.throws(() => parseArgs(["diagnose", "--no-start"]), /diagnose não combina com --no-start/);
+  assert.throws(() => parseArgs(["diagnose", "home-awake"]), /desconhecido/);
 });
 
 test("package.json na versão do app (like-move/VERSION)", () => {
