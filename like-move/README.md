@@ -117,7 +117,7 @@ Ao executar, o like-move aparece como ícone na bandeja do sistema:
 | Opção | Descrição |
 |-------|-----------|
 | *(primeira linha)* | Status ao vivo: "Acordado agora: KVM", "Aguardando: faltam 18s", "Parado: fora de rede confiável"… |
-| **Ativo** | Liga/desliga o like-move (checkbox) |
+| **Ativo** | Liga/desliga o like-move (checkbox). O clique esquerdo no ícone faz o mesmo, sem abrir o menu |
 | **Modo →** | Seleciona modo de trigger (Inatividade, KVM, Ambos, Sempre) |
 | **Dispositivos KVM →** | Seleciona quais dispositivos monitorar (visível nos modos KVM/Ambos) |
 | **Threshold →** | Tempo de inatividade antes de manter acordado (15s, 30s, 1min, 2min, 5min) |

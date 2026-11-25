@@ -86,6 +86,25 @@ class TrayFeaturesTest(unittest.TestCase):
             self.assertIn(name, items)
             self.assertFalse(items[name].checked)
 
+    def test_active_item_is_the_only_default_item(self):
+        items = self.app._build_menu().items
+        defaults = [i.text for i in items if i.default]
+        self.assertEqual(defaults, ["Ativo"])
+
+    def test_default_item_flips_and_persists_the_state(self):
+        active = self.top_items()["Ativo"]
+        self.assertTrue(active.checked)
+        active(self.app._icon)
+        self.assertFalse(self.app._state.enabled)
+        self.assertFalse(tray.JigglerState().enabled)
+        self.assertFalse(active.checked)
+        active(self.app._icon)
+        self.assertTrue(tray.JigglerState().enabled)
+
+    def test_left_click_on_the_menu_runs_the_active_handler(self):
+        self.app._build_menu()(self.app._icon)
+        self.assertFalse(tray.JigglerState().enabled)
+
     def test_menu_keeps_the_existing_entries(self):
         names = set(self.top_items())
         for name in ("Ativo", "Modo", "Threshold", "Redes confiáveis", "Iniciar com Windows", "Sobre", "Sair"):

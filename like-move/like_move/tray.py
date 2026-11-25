@@ -652,6 +652,7 @@ class TrayApp:
                 "Ativo",
                 self._on_toggle,
                 checked=lambda item: self._state.enabled,
+                default=True,
             ),
             Menu.SEPARATOR,
             MenuItem("Modo", Menu(*mode_items)),
